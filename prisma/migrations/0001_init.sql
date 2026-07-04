@@ -10,6 +10,8 @@ CREATE TABLE "NexusProvider" (
   "authHeader"    TEXT NOT NULL DEFAULT 'Authorization',
   "authPrefix"    TEXT,
   "modelIdPath"   TEXT NOT NULL DEFAULT 'data[].id',
+  "tier"          TEXT NOT NULL DEFAULT 'standard',
+  "preferredModel" TEXT,
   "isActive"      BOOLEAN NOT NULL DEFAULT true,
   "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

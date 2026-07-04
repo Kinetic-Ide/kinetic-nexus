@@ -20,6 +20,8 @@ model NexusProvider {
   authHeader     String     @default("Authorization")
   authPrefix     String?
   modelIdPath    String     @default("data[].id")
+  tier           String     @default("standard")
+  preferredModel String?
   isActive       Boolean    @default(true)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt

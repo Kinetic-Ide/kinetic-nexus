@@ -4,25 +4,20 @@ import { handleProxy }    from '../services/completionsProxy.service';
 import type { CompletionsBody } from '../services/completionsProxy.service';
 
 export default async function proxyRoutes(fastify: FastifyInstance) {
-  // OpenAI-compatible completions endpoint
-  // Users point Cursor / any tool here as Custom AI base URL
   fastify.post('/v1/chat/completions', { preHandler: [verifyApiKey] }, async (request, reply) => {
     return handleProxy(request.body as CompletionsBody, reply);
   });
 
-  // Models list — so Cursor can discover available models
+  // Always returns just "nexus" — that's the only model name users need
   fastify.get('/v1/models', { preHandler: [verifyApiKey] }, async (_request, reply) => {
-    const { getModelRegistry } = await import('../services/model.service');
-    const registry = await getModelRegistry();
-    const active   = registry.filter(m => m.status === 'active');
     return reply.send({
       object: 'list',
-      data: active.map(m => ({
-        id:       m.id,
+      data: [{
+        id:       'nexus',
         object:   'model',
         created:  Math.floor(Date.now() / 1000),
-        owned_by: m.provider,
-      })),
+        owned_by: 'kinetic-nexus',
+      }],
     });
   });
 }

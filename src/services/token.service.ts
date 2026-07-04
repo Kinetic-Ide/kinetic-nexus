@@ -1,25 +1,26 @@
-import { prisma }       from '../lib/prisma';
-import { calculateCost } from './model.service';
-import type { AiModel }  from './model.service';
-import { randomUUID }   from 'crypto';
+import { prisma }     from '../lib/prisma';
+import { randomUUID } from 'crypto';
 
 export interface RecordTokenUsageParams {
   sessionId:    string;
-  model:        AiModel;
+  modelId:      string;
+  modelName:    string;
+  provider:     string;
   inputTokens:  number;
   outputTokens: number;
+  nexusKeyId?:  string;
 }
 
 export async function recordTokenUsage(p: RecordTokenUsageParams): Promise<void> {
-  const total       = p.inputTokens + p.outputTokens;
-  const estimatedUsd = calculateCost(p.model, p.inputTokens, p.outputTokens);
+  const total        = p.inputTokens + p.outputTokens;
+  const estimatedUsd = 0; // cost tracking is per-provider, handled by dashboard
   await prisma.tokenUsage.create({
     data: {
       id:           randomUUID(),
       sessionId:    p.sessionId,
-      modelId:      p.model.id,
-      modelName:    p.model.displayName,
-      provider:     p.model.provider,
+      modelId:      p.modelId,
+      modelName:    p.modelName,
+      provider:     p.provider,
       inputTokens:  p.inputTokens,
       outputTokens: p.outputTokens,
       totalTokens:  total,
@@ -57,7 +58,6 @@ export async function getUsageSummary(period: 'today' | '7d' | '30d') {
     byModel[r.modelId].usd   += r.estimatedUsd;
   }
 
-  // Daily breakdown
   const dayMap = new Map<string, number>();
   for (const r of rows) {
     const day = r.createdAt.toISOString().slice(0, 10);

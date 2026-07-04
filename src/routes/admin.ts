@@ -7,7 +7,7 @@ import { encrypt, maskKey }    from '../lib/encryption';
 import { getSetting, setSetting } from '../services/settings.service';
 import { getModelRegistry, updateModelRegistry } from '../services/model.service';
 import { getUsageSummary }     from '../services/token.service';
-import { testKey, banKey, coolKey } from '../services/nexus.service';
+import { testKey, banKey, coolKey, validateProviderCredentials, validateModel, providerDefaultUrl } from '../services/nexus.service';
 import { redis }               from '../lib/redis';
 import { REGISTRY_CACHE_KEY }  from '../lib/registryCacheKey';
 
@@ -48,14 +48,16 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   });
 
   const providerSchema = z.object({
-    name:         z.string().min(1),
-    slug:         z.string().min(1).regex(/^[a-z0-9-]+$/),
-    provider:     z.enum(['anthropic', 'openai', 'google', 'groq', 'openrouter', 'custom']),
-    baseUrl:      z.string().url().optional(),
-    modelFetchUrl:z.string().url().optional(),
-    authHeader:   z.string().default('Authorization'),
-    authPrefix:   z.string().optional(),
-    modelIdPath:  z.string().default('data[].id'),
+    name:           z.string().min(1),
+    slug:           z.string().min(1).regex(/^[a-z0-9-]+$/),
+    provider:       z.enum(['anthropic', 'openai', 'google', 'groq', 'openrouter', 'custom']),
+    tier:           z.enum(['premium', 'standard', 'fast']).default('standard'),
+    preferredModel: z.string().optional(),
+    baseUrl:        z.string().url().optional(),
+    modelFetchUrl:  z.string().url().optional(),
+    authHeader:     z.string().default('Authorization'),
+    authPrefix:     z.string().optional(),
+    modelIdPath:    z.string().default('data[].id'),
   });
 
   fastify.post('/admin/providers', adminGuard, async (request, reply) => {
@@ -198,6 +200,57 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     if (key === 'ENCRYPTION_SECRET') return reply.code(403).send({ error: 'Forbidden' });
     await setSetting(key, value);
     return reply.send({ success: true });
+  });
+
+  // ── Validation ────────────────────────────────────────────────────
+
+  fastify.post('/admin/validate/provider', adminGuard, async (request, reply) => {
+    const { provider, baseUrl, apiKey, authHeader = 'Authorization', authPrefix } =
+      request.body as { provider: string; baseUrl?: string; apiKey: string; authHeader?: string; authPrefix?: string };
+    if (!apiKey) return reply.code(400).send({ error: 'apiKey is required' });
+    const result = await validateProviderCredentials(provider, baseUrl ?? null, apiKey, authHeader, authPrefix ?? null);
+    return reply.send(result);
+  });
+
+  fastify.post('/admin/validate/model', adminGuard, async (request, reply) => {
+    const { providerId, modelName } = request.body as { providerId: string; modelName: string };
+    if (!providerId || !modelName) return reply.code(400).send({ error: 'providerId and modelName are required' });
+    const result = await validateModel(providerId, modelName);
+    return reply.send(result);
+  });
+
+  // ── Routing status ────────────────────────────────────────────────
+
+  fastify.get('/admin/routing/status', adminGuard, async (_req, reply) => {
+    const providers = await prisma.nexusProvider.findMany({
+      where:   { isActive: true },
+      include: { keys: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const now = new Date();
+    const tiers = ['premium', 'standard', 'fast'];
+    const status = tiers.map(tier => {
+      const tierProviders = providers.filter(p => p.tier === tier);
+      const totalKeys     = tierProviders.flatMap(p => p.keys).length;
+      const activeKeys    = tierProviders.flatMap(p => p.keys).filter(k =>
+        k.status === 'active' && (!k.coolingUntil || k.coolingUntil <= now)
+      ).length;
+      return {
+        tier,
+        providers: tierProviders.map(p => ({
+          id:             p.id,
+          name:           p.name,
+          preferredModel: p.preferredModel,
+          totalKeys,
+          activeKeys,
+        })),
+      };
+    });
+
+    const defaultBaseUrl = providerDefaultUrl;
+    void defaultBaseUrl;
+    return reply.send({ tiers: status });
   });
 
   // ── Cache bust ────────────────────────────────────────────────────
