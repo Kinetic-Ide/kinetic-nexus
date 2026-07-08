@@ -4,7 +4,8 @@ import { recordTokenUsage }          from './token.service';
 import { computeReserve, countMessageTokens, countTokens } from '../lib/tokenizer';
 import { reconcileTpm }              from '../lib/admission';
 import { sessionHash, setStickyKeyId } from '../lib/sticky';
-import { stripTrailingSlash }        from '../lib/url';
+import { stripTrailingSlash, assertSafeUrl } from '../lib/url';
+import { getSsrfPolicy }              from './ssrf.service';
 
 export interface CompletionsBody {
   model?:       string;
@@ -90,6 +91,15 @@ export async function handleProxy(
   // Release the full token reservation for a request that did not (fully) run.
   // RPM stays consumed on purpose — the request was attempted against the provider.
   const refundReservation = () => { void reconcileTpm(keyId, reserve, 0).catch(() => {}); };
+
+  // Defense in depth: base URLs are SSRF-validated when a provider is created, but
+  // re-check on the hot path so a route can never reach a blocked internal host.
+  try {
+    assertSafeUrl(stripTrailingSlash(route.baseUrl), await getSsrfPolicy());
+  } catch (err) {
+    refundReservation();
+    return reply.code(502).send({ error: err instanceof Error ? err.message : 'Upstream blocked by SSRF policy.' });
+  }
 
   const upstreamUrl  = `${stripTrailingSlash(route.baseUrl)}/chat/completions`;
   const upstreamBody = { ...body, model: route.modelString };

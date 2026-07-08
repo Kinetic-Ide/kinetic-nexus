@@ -10,6 +10,8 @@ import { getModelRegistry, updateModelRegistry } from '../services/model.service
 import { getUsageSummary, getUsageByTeamKey, getTimeSeriesByTeam, getTimeSeriesByModel } from '../services/token.service';
 import { testKey, banKey, coolKey, validateProviderCredentials, validateModel, providerDefaultUrl } from '../services/nexus.service';
 import { onSuccess as breakerReset } from '../lib/breaker';
+import { assertSafeUrl }         from '../lib/url';
+import { getSsrfPolicy, getSsrfConfig, setSsrfConfig } from '../services/ssrf.service';
 import { redis }               from '../lib/redis';
 import { REGISTRY_CACHE_KEY }  from '../lib/registryCacheKey';
 
@@ -50,6 +52,24 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     return reply.send({ key: newKey });
   });
 
+  // ── SSRF / network security ───────────────────────────────────────
+
+  fastify.get('/admin/settings/ssrf', adminGuard, async (_req, reply) => {
+    return reply.send(await getSsrfConfig());
+  });
+
+  const ssrfSchema = z.object({
+    allowPrivate: z.boolean(),
+    // Each entry is a bare host or host:port — no scheme, path, or spaces.
+    allowList:    z.array(z.string().regex(/^[a-z0-9.:_-]+$/i, 'Use host or host:port only')).max(50),
+  });
+
+  fastify.put('/admin/settings/ssrf', adminGuard, async (request, reply) => {
+    const body = ssrfSchema.parse(request.body);
+    await setSsrfConfig(body.allowPrivate, body.allowList);
+    return reply.send(await getSsrfConfig());
+  });
+
   // ── Providers ─────────────────────────────────────────────────────
 
   fastify.get('/admin/providers', adminGuard, async (_req, reply) => {
@@ -73,8 +93,22 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     modelIdPath:    z.string().default('data[].id'),
   });
 
+  // Reject provider base/fetch URLs that resolve to a blocked internal host, so a
+  // malicious URL is stopped at the door rather than persisted (SSRF defense).
+  async function assertProviderUrlsSafe(body: { baseUrl?: string; modelFetchUrl?: string }): Promise<string | null> {
+    const policy = await getSsrfPolicy();
+    for (const url of [body.baseUrl, body.modelFetchUrl]) {
+      if (!url) continue;
+      try { assertSafeUrl(url, policy); }
+      catch (err) { return err instanceof Error ? err.message : 'Blocked URL'; }
+    }
+    return null;
+  }
+
   fastify.post('/admin/providers', adminGuard, async (request, reply) => {
     const body = providerSchema.parse(request.body);
+    const urlErr = await assertProviderUrlsSafe(body);
+    if (urlErr) return reply.code(400).send({ error: urlErr });
     const existing = await prisma.nexusProvider.findUnique({ where: { slug: body.slug } });
     if (existing) return reply.code(409).send({ error: 'Slug already exists' });
     const provider = await prisma.nexusProvider.create({ data: { id: randomUUID(), ...body } });
@@ -84,6 +118,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   fastify.patch('/admin/providers/:id', adminGuard, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body   = providerSchema.partial().parse(request.body);
+    const urlErr = await assertProviderUrlsSafe(body);
+    if (urlErr) return reply.code(400).send({ error: urlErr });
     const provider = await prisma.nexusProvider.update({ where: { id }, data: body });
     return reply.send({ provider });
   });

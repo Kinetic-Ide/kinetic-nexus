@@ -324,7 +324,33 @@ The built-in web dashboard (`/dashboard`) gives you full operational control:
 | **Team key hashing** | SHA-256; plaintext shown once at creation, never stored |
 | **HTTP hardening** | Fastify Helmet — `X-Frame-Options`, `X-Content-Type-Options`, HSTS, CSP headers |
 | **CORS** | Configurable origin allowlist |
+| **SSRF protection** | Outbound provider requests are restricted to http(s) **and** blocked from private/loopback/internal hosts by default (see below) |
 | **No telemetry** | Zero outbound calls to Alayra Systems or any third party. All data stays in your infrastructure |
+
+### SSRF protection
+
+Because the gateway makes outbound calls to operator-configured provider base URLs, an
+unrestricted URL could be pointed at internal-only addresses — cloud metadata
+(`169.254.169.254`), loopback admin panels, or private LAN hosts — turning Nexus into a
+proxy into your own network. To prevent that, **Nexus blocks private, loopback, and
+link-local hosts by default** on every path that adds or uses a provider URL. A blocked
+URL is rejected when you save the provider, so it never reaches the request path.
+
+Running a **local model** (Ollama, LM Studio, a private gateway)? Allow just that host:
+
+- **In the dashboard:** *Settings → Network security* — tick "Allow private / localhost"
+  to disable blocking on a trusted network, or add specific hosts (e.g. `localhost:11434`)
+  to the allowlist.
+- **Via environment** (baseline the dashboard builds on):
+  ```bash
+  # allow a specific local provider without disabling blocking:
+  SSRF_ALLOWLIST=localhost:11434,127.0.0.1:11434
+  # or, on a fully trusted network, disable private-host blocking entirely:
+  SSRF_ALLOW_PRIVATE=true
+  ```
+
+Allowlist entries are `host` or `host:port` (a bare host permits any port). The env values
+form a read-only baseline; hosts added in the dashboard are merged on top.
 
 > [!WARNING]
 > Your `.env` file contains `MASTER_ENCRYPTION_KEY` and `ADMIN_PASSWORD`.  
@@ -342,6 +368,8 @@ The built-in web dashboard (`/dashboard`) gives you full operational control:
 - [x] Analytics — cost tracking, token trends, team leaderboard, CSV export
 - [x] Custom date range analytics
 - [x] Automated test suite and CI (lint, typecheck, test, build, audit)
+- [x] Circuit breaker (escalating cooldown, half-open probe) + cache-aware sticky routing
+- [x] SSRF protection — default-on private-host blocking with an opt-in allowlist
 - [ ] Per-key TPM enforcement (limits are configurable today; enforcement upcoming)
 - [ ] Atomic pre-admission rate limiting with real token accounting
 - [ ] Webhook and email alerts on key failure or budget threshold

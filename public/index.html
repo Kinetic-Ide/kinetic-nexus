@@ -360,6 +360,19 @@ tr:hover td{background:rgba(255,255,255,.02)}
           <input type="hidden" id="settings-key-raw"/>
           <button class="btn-danger btn-sm" style="margin-top:8px" onclick="rotateKey()">⟳ Rotate key</button>
         </div>
+
+        <div class="card" style="max-width:500px;margin-top:16px">
+          <div class="card-title">Network security (SSRF protection)</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">By default, Nexus refuses to call private, loopback, or internal addresses — this blocks a provider URL from being pointed at cloud metadata or your internal network. Running a local model (Ollama, LM Studio)? Add its host below to allow just that one.</p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+            <input type="checkbox" id="ssrf-allow-private"/>
+            <span>Allow private / localhost addresses (disables blocking — trusted networks only)</span>
+          </label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Allowlisted hosts — one per line (<code>host</code> or <code>host:port</code>)</label>
+          <textarea id="ssrf-allowlist" rows="3" placeholder="localhost:11434&#10;127.0.0.1:11434" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);resize:vertical"></textarea>
+          <div id="ssrf-env-hint" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+          <button class="btn btn-sm" style="margin-top:10px" onclick="saveSsrf()">Save network settings</button>
+        </div>
       </div>
 
     </main>
@@ -1465,6 +1478,26 @@ async function loadSettings() {
     document.getElementById('settings-key-raw').value = cfg.nexusApiKey || '';
     document.getElementById('settings-key').textContent = (cfg.nexusApiKey||'').slice(0,8)+'••••••••';
   } catch {}
+  try {
+    const ssrf = await GET('/admin/settings/ssrf');
+    document.getElementById('ssrf-allow-private').checked = !!ssrf.allowPrivate;
+    document.getElementById('ssrf-allowlist').value = (ssrf.allowList||[]).join('\n');
+    const env = ssrf.envAllowList||[];
+    document.getElementById('ssrf-env-hint').textContent = env.length
+      ? 'Also allowed via environment (read-only): ' + env.join(', ')
+      : '';
+  } catch {}
+}
+
+async function saveSsrf() {
+  const allowPrivate = document.getElementById('ssrf-allow-private').checked;
+  const allowList = document.getElementById('ssrf-allowlist').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  try {
+    await PUT('/admin/settings/ssrf', { allowPrivate, allowList });
+    toast('Network settings saved');
+    loadSettings();
+  } catch(e) { toast(e.message, true); }
 }
 
 let keyVisible = false;

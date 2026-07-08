@@ -3,7 +3,8 @@ import { decrypt, maskKey } from '../lib/encryption';
 import { admitKey }         from '../lib/admission';
 import * as breaker         from '../lib/breaker';
 import { getStickyKeyId }   from '../lib/sticky';
-import { stripTrailingSlash, assertHttpUrl } from '../lib/url';
+import { stripTrailingSlash, assertSafeUrl } from '../lib/url';
+import { getSsrfPolicy }     from './ssrf.service';
 
 export { maskKey };
 
@@ -225,7 +226,7 @@ export async function testKey(keyId: string): Promise<{ success: boolean; latenc
   const start   = Date.now();
 
   try {
-    assertHttpUrl(baseUrl);
+    assertSafeUrl(baseUrl, await getSsrfPolicy());
     const res = await fetch(`${baseUrl}/models`, {
       headers: { [key.provider.authHeader]: `${key.provider.authPrefix ?? 'Bearer'} ${apiKey}` },
       signal:  AbortSignal.timeout(5000),
@@ -247,7 +248,7 @@ export async function validateProviderCredentials(
   const url   = `${base}/models`;
   const start = Date.now();
   try {
-    assertHttpUrl(base);
+    assertSafeUrl(base, await getSsrfPolicy());
     const res = await fetch(url, {
       headers: { [authHeader]: `${authPrefix ?? 'Bearer'} ${apiKey}` },
       signal:  AbortSignal.timeout(8000),
@@ -274,7 +275,7 @@ export async function validateModel(
   const start   = Date.now();
 
   try {
-    assertHttpUrl(baseUrl);
+    assertSafeUrl(baseUrl, await getSsrfPolicy());
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method:  'POST',
       headers: {

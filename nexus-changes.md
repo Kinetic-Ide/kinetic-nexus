@@ -11,6 +11,36 @@
 
 ---
 
+**Date:** 2026-07-08 · Session 9  
+**Author:** Abbas  
+**Title:** Network Security — SSRF Protection with Default-On Private-Host Blocking and an Opt-In Allowlist  
+
+**Summary:**  
+Hardened the gateway's outbound requests against server-side request forgery. Because
+Nexus fetches operator-configured provider base URLs, an unrestricted URL could be
+aimed at internal-only addresses — cloud metadata, loopback services, or private LAN
+hosts — and use the gateway as a proxy into its own network. Requests to private,
+loopback, link-local, and internal-name hosts are now refused by default across every
+path that adds or uses a provider URL: a bad URL is rejected the moment a provider is
+created or updated, so it never reaches the request path, and the proxy path re-checks
+as defense in depth.
+
+Operators who run a legitimate local provider (Ollama, LM Studio) can permit exactly
+the host they need rather than turning the protection off wholesale. A new *Network
+security* panel in the dashboard Settings tab lets an admin toggle private-host
+blocking and manage an allowlist of specific hosts live, backed by new admin endpoints;
+the same values can be seeded from environment variables, which the dashboard settings
+build on top of. The default posture is secure — blocking on, allowlist empty — so a
+fresh deployment is protected without any configuration.
+
+Added a private-host classifier covering IPv4 and IPv6 ranges (including cloud-metadata
+and IPv4-mapped addresses) and the URL validator, with unit coverage for the blocking,
+allowlist, and disabled-blocking paths (64 tests total, all green). Documented the
+feature and the local-provider workflow in the README, and verified the new settings
+panel renders in the dashboard.
+
+---
+
 **Date:** 2026-07-08 · Session 8  
 **Author:** Abbas  
 **Title:** Phase 3 — Resilience: Circuit Breaker + Cache-Aware Sticky Routing  
