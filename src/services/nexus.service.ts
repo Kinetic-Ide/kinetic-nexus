@@ -1,6 +1,6 @@
 import { prisma }           from '../lib/prisma';
-import { redis }            from '../lib/redis';
 import { decrypt, maskKey } from '../lib/encryption';
+import { admitKey }         from '../lib/admission';
 
 export { maskKey };
 
@@ -34,7 +34,7 @@ export function providerDefaultUrl(provider: string): string {
 async function tryPickKey(providerRow: {
   id: string; baseUrl: string | null; provider: string;
   authHeader: string; authPrefix: string | null; tier: string; preferredModel: string | null;
-}): Promise<Omit<NexusRoute, 'wasDowngrade'> | null> {
+}, reserveTokens: number): Promise<Omit<NexusRoute, 'wasDowngrade'> | null> {
   if (!providerRow.preferredModel) return null;
 
   const now  = new Date();
@@ -48,12 +48,12 @@ async function tryPickKey(providerRow: {
   });
 
   for (const key of keys) {
-    const rpmKey   = `nexus:rpm:${key.id}`;
-    const rpmCount = parseInt((await redis.get(rpmKey)) ?? '0', 10);
-    if (rpmCount >= key.rpmLimit) continue;
+    // Atomic RPM + TPM admission. A key at either limit is skipped so the loop
+    // rotates to the next key/tier; the caller only fails once every key is
+    // exhausted (rotate first, fail last).
+    const admitted = await admitKey(key.id, key.rpmLimit, key.tpmLimit, reserveTokens);
+    if (!admitted) continue;
 
-    await redis.incr(rpmKey);
-    await redis.expire(rpmKey, 60);
     await prisma.nexusKey.update({ where: { id: key.id }, data: { lastUsedAt: now } });
 
     return {
@@ -70,7 +70,12 @@ async function tryPickKey(providerRow: {
   return null;
 }
 
-export async function discoverBestPool(): Promise<NexusRoute | null> {
+/**
+ * Find the best available key across tiers, atomically reserving `reserveTokens`
+ * (estimated input + max output) against the chosen key's TPM budget. Returns
+ * null only when every active key is out of RPM or TPM headroom.
+ */
+export async function discoverBestPool(reserveTokens: number): Promise<NexusRoute | null> {
   let preferredTierFound = false;
 
   for (const tier of TIER_ORDER) {
@@ -81,7 +86,7 @@ export async function discoverBestPool(): Promise<NexusRoute | null> {
 
     for (const provider of providers) {
       if (!preferredTierFound) preferredTierFound = true;
-      const route = await tryPickKey(provider);
+      const route = await tryPickKey(provider, reserveTokens);
       if (route) {
         const wasDowngrade = TIER_ORDER.indexOf(tier) > 0 && preferredTierFound;
         return { ...route, wasDowngrade };

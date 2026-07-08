@@ -11,6 +11,44 @@
 
 ---
 
+**Date:** 2026-07-08 · Session 6  
+**Author:** Abbas  
+**Title:** Phase 2 — Real Admission Control: Atomic RPM/TPM, Tokenizer, Reservation, and Upstream Timeouts  
+
+**Summary:**  
+Replaced the request-admission path with real, race-free budget enforcement.
+Previously each key's requests-per-minute counter was checked and then incremented
+in two separate Redis calls, so under concurrency several requests could pass a
+check only one should have; tokens-per-minute limits were stored but never
+enforced; and input token counts were a crude character-count divided by four.
+
+Introduced an atomic admission primitive (`src/lib/admission.ts`): a single Redis
+Lua script that checks both the RPM and TPM budgets and, only if both have
+headroom, increments the request counter and reserves the request's estimated
+tokens — in one atomic operation. Pool selection (`nexus.service.ts`) now calls
+this per key and rotates to the next key or tier when a key is out of either
+budget, only failing the request once the entire pool is exhausted (rotate first,
+fail last).
+
+Added a real tokenizer (`src/lib/tokenizer.ts`, built on `js-tiktoken`) to
+estimate a request's input tokens before it is forwarded, replacing the
+character-count heuristic. Each request reserves `estimated input + max_tokens`
+against the chosen key's TPM budget; when the response completes, the reservation
+is reconciled down to the provider's real token usage, and a failed request
+releases its full reservation.
+
+Hardened the upstream call in the completions proxy with three independent
+timeouts: a time-to-first-byte deadline (abort if the provider never returns
+headers), a body-read deadline for non-streaming responses, and an idle-gap
+deadline for streaming responses (a hung stream is aborted while a legitimately
+long one keeps flowing as chunks arrive). All three are environment-configurable.
+
+Added unit tests for the tokenizer, the reservation math, and the admission key
+derivation (29 tests total, all green), and documented the new environment
+variables in the README and `.env.example`.
+
+---
+
 **Date:** 2026-07-08 · Session 5  
 **Author:** Abbas  
 **Title:** Community Health Files, Security Policy, and Dependency Automation Hardening  

@@ -168,6 +168,10 @@ Dashboard is live at `http://localhost:3000/dashboard`
 | `LOG_LEVEL` | No | Pino log level: `info`, `debug`, `warn` (default: `info`) |
 | `ABUSE_RATE_LIMIT_MAX` | No | Requests **per credential** per window before the abuse guard trips (default: `12000`). This is DoS/abuse protection, **not** a throughput cap — see [Rate limits, explained](#rate-limits-explained). |
 | `ABUSE_RATE_LIMIT_WINDOW` | No | Abuse-guard window (default: `1 minute`) |
+| `NEXUS_DEFAULT_MAX_TOKENS` | No | Output tokens reserved against a key's TPM budget when a request omits `max_tokens` (default: `2048`; reconciled to real usage afterward) |
+| `UPSTREAM_TTFT_MS` | No | Abort if a provider doesn't return response headers within this many ms (default: `20000`) |
+| `UPSTREAM_BODY_MS` | No | Non-streaming: max ms to read the full response body (default: `60000`) |
+| `UPSTREAM_STREAM_IDLE_MS` | No | Streaming: max ms gap between chunks before a hung stream is aborted (default: `30000`) |
 
 > [!IMPORTANT]
 > Generate `MASTER_ENCRYPTION_KEY` with:
