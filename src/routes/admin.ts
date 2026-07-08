@@ -9,6 +9,7 @@ import { getSetting, setSetting } from '../services/settings.service';
 import { getModelRegistry, updateModelRegistry } from '../services/model.service';
 import { getUsageSummary, getUsageByTeamKey, getTimeSeriesByTeam, getTimeSeriesByModel } from '../services/token.service';
 import { testKey, banKey, coolKey, validateProviderCredentials, validateModel, providerDefaultUrl } from '../services/nexus.service';
+import { onSuccess as breakerReset } from '../lib/breaker';
 import { redis }               from '../lib/redis';
 import { REGISTRY_CACHE_KEY }  from '../lib/registryCacheKey';
 
@@ -142,6 +143,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   fastify.post('/admin/keys/:id/unban', adminGuard, async (request, reply) => {
     const { id } = request.params as { id: string };
+    // Clear the Redis breaker state too, or the key would stay gated after unban.
+    await breakerReset(id);
     await prisma.nexusKey.update({ where: { id }, data: { status: 'active', coolingUntil: null } });
     return reply.send({ success: true });
   });

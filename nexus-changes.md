@@ -11,6 +11,45 @@
 
 ---
 
+**Date:** 2026-07-08 · Session 8  
+**Author:** Abbas  
+**Title:** Phase 3 — Resilience: Circuit Breaker + Cache-Aware Sticky Routing  
+
+**Summary:**  
+Replaced the single flat cooldown with a real per-key circuit breaker and added
+cache-aware sticky routing, so the gateway both fails gracefully and stops wasting
+provider prompt caches. All breaker state lives in Redis, keeping it atomic and
+consistent across replicas with no database writes on the hot path.
+
+The breaker distinguishes the kinds of failure a provider can return. Server-side
+faults (5xx, upstream timeouts, and streams that connect but hang) accumulate as
+strikes and trip the breaker after three consecutive failures in a five-minute
+window. Each trip escalates the cooldown — ten seconds, then twenty, then forty,
+doubling to a ten-minute ceiling — so a key that keeps failing is pushed further
+away rather than retried on the same fixed timer indefinitely. When a cooldown
+expires the router admits exactly one half-open probe: success closes the breaker
+and resets the streak, while failure re-escalates without returning full traffic to
+a still-unhealthy provider. Rate-limit responses (429) are handled separately on
+their own flat, non-escalating cooldown, and two consecutive authentication
+failures (401/403) ban a key outright, since a bad credential does not recover on
+its own. Any success at any point resets the streak, and the dashboard's cooling and
+banned states — plus the admin unban action — stay in step with the live breaker.
+
+Cache-aware sticky routing pins a multi-turn conversation to the key that last
+served it, so follow-up turns reuse the upstream provider's prompt cache instead of
+being scattered across the pool by least-recently-used rotation. A session is
+identified by an explicit `X-Nexus-Session` header, the OpenAI `user` field, or a
+stable fingerprint of the opening messages, and falls back to normal tier and LRU
+selection for new sessions or when the pinned key is unavailable. The routing
+contract remains a single virtual model (`kinetic-nexus-1`); this decision is now
+documented so early adopters can depend on it.
+
+Added unit tests for the breaker escalation curve and thresholds and for the
+session-fingerprinting logic (51 tests total, all green), and documented both the
+breaker behaviour and sticky routing in the README.
+
+---
+
 **Date:** 2026-07-08 · Session 7  
 **Author:** Abbas  
 **Title:** Security Hardening — Resolve CodeQL Alerts (XSS, ReDoS, URL Validation, CI Permissions)  

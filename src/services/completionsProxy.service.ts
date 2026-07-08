@@ -1,8 +1,9 @@
 import type { FastifyReply } from 'fastify';
-import { discoverBestPool, coolKey, getNextCooldownSeconds } from './nexus.service';
+import { discoverBestPool, getNextCooldownSeconds, reportSuccess, reportServerFailure, reportRateLimit, reportAuthFailure } from './nexus.service';
 import { recordTokenUsage }          from './token.service';
 import { computeReserve, countMessageTokens, countTokens } from '../lib/tokenizer';
 import { reconcileTpm }              from '../lib/admission';
+import { sessionHash, setStickyKeyId } from '../lib/sticky';
 import { stripTrailingSlash }        from '../lib/url';
 
 export interface CompletionsBody {
@@ -54,7 +55,12 @@ function estimateDeltaTokens(collected: string): number {
   return Math.max(1, countTokens(content));
 }
 
-export async function handleProxy(body: CompletionsBody, reply: FastifyReply, teamKeyId?: string): Promise<FastifyReply | void> {
+export async function handleProxy(
+  body: CompletionsBody,
+  reply: FastifyReply,
+  teamKeyId?: string,
+  reqHeaders: Record<string, unknown> = {},
+): Promise<FastifyReply | void> {
   const modelField = (body.model ?? '').trim().toLowerCase();
   if (modelField && modelField !== 'kinetic-nexus-1' && modelField !== 'nexus') {
     return reply.code(400).send({
@@ -65,8 +71,10 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const isStream = body.stream === true;
   const reserve  = computeReserve(messages, body.max_tokens, DEFAULT_MAX_TOKENS_RESERVE);
+  // Cache-aware sticky routing: pin a continuing conversation to its last key.
+  const session  = sessionHash({ messages, user: body.user }, reqHeaders);
 
-  const route = await discoverBestPool(reserve);
+  const route = await discoverBestPool(reserve, session);
   if (!route) {
     const retryAfter = await getNextCooldownSeconds();
     return reply
@@ -103,15 +111,21 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
   } catch (err) {
     if (ttftTimer) clearTimeout(ttftTimer);
     refundReservation();
+    // A timeout/connection failure is a server-side fault: feed the breaker.
+    await reportServerFailure(keyId, route.isProbe);
     const aborted = err instanceof Error && err.name === 'AbortError';
-    if (aborted) await coolKey(keyId, 30); // slow to first byte — cool briefly and rotate next time
     return reply.code(504).send({ error: aborted ? 'Upstream timed out before responding.' : 'Upstream connection failed.' });
   }
   if (ttftTimer) { clearTimeout(ttftTimer); ttftTimer = null; }
 
   if (!upstream.ok) {
     const errText = await upstream.text().catch(() => 'Upstream error');
-    if (upstream.status === 429) await coolKey(keyId, 60);
+    // Classify the failure for the circuit breaker: 429 is flat back-pressure,
+    // 401/403 is a bad credential (auto-ban on repeat), 5xx is a server fault
+    // (strike/escalate). Other 4xx are the caller's error — the key is fine.
+    if (upstream.status === 429)                             await reportRateLimit(keyId);
+    else if (upstream.status === 401 || upstream.status === 403) await reportAuthFailure(keyId);
+    else if (upstream.status >= 500)                         await reportServerFailure(keyId, route.isProbe);
     refundReservation(); // rejected upstream — return the reserved budget
     return reply.code(upstream.status).send(errText);
   }
@@ -121,6 +135,13 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
     'X-Nexus-Provider':       route.providerSlug,
     'X-Nexus-Tier':           route.tier,
     ...(route.wasDowngrade ? { 'X-Nexus-Tier-Downgrade': 'true' } : {}),
+    ...(route.sticky        ? { 'X-Nexus-Sticky': 'true' } : {}),
+  };
+  // On a healthy response, close the breaker and pin this session to the key so
+  // follow-up turns reuse the provider's prompt cache.
+  const onHealthy = () => {
+    void reportSuccess(keyId, route.isProbe).catch(() => {});
+    if (session) void setStickyKeyId(session, keyId).catch(() => {});
   };
 
   if (isStream && upstream.body) {
@@ -136,6 +157,7 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
     const reader    = upstream.body.getReader();
     const decoder   = new TextDecoder();
     let collected   = '';
+    let streamFailed = false;
     // Idle guard: abort if the gap between chunks exceeds STREAM_IDLE_MS.
     let idleTimer: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), STREAM_IDLE_MS);
 
@@ -148,11 +170,16 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
         collected += decoder.decode(value, { stream: true });
         reply.raw.write(value);
       }
-    } catch { /* aborted (idle timeout) or upstream error mid-stream — flush what we have */ }
+    } catch { streamFailed = true; /* aborted (idle timeout) or upstream error mid-stream — flush what we have */ }
     finally {
       clearTimeout(idleTimer);
       reply.raw.end();
     }
+
+    // A stream that connected (200 headers) but hung/aborted mid-flight is a
+    // server-side fault; a clean completion closes the breaker and sticks.
+    if (streamFailed) void reportServerFailure(keyId, route.isProbe).catch(() => {});
+    else onHealthy();
 
     const usage        = parseUsageFromSSE(collected);
     const inputTokens  = usage?.input  ?? countMessageTokens(messages);
@@ -173,6 +200,8 @@ export async function handleProxy(body: CompletionsBody, reply: FastifyReply, te
     return reply.code(504).send({ error: 'Upstream response timed out or was malformed.' });
   }
   clearTimeout(bodyTimer);
+
+  onHealthy();
 
   const usageObj     = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
   const inputTokens  = usageObj?.prompt_tokens     ?? countMessageTokens(messages);

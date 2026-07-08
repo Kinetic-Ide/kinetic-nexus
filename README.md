@@ -48,6 +48,8 @@ Kinetic Nexus is the infrastructure layer that sits between your application and
 |---|---|
 | **Key Pool Management** | Store unlimited API keys per provider, encrypted at rest with AES-256-GCM |
 | **Intelligent Load Balancing** | Automatic rotation across active keys; cooling and banned keys are automatically bypassed |
+| **Circuit Breaker** | Per-key breaker with escalating cooldown, a single half-open recovery probe, separate 429 handling, and auto-ban on repeated auth failures |
+| **Cache-Aware Sticky Routing** | Multi-turn conversations stay pinned to the same upstream so the provider's prompt cache isn't thrown away by round-robin |
 | **Tiered Failover** | Premium → Standard → Fast chains; when the best key fails the next tier fires instantly |
 | **OpenAI-Compatible API** | Drop-in `/v1/chat/completions` — change one base URL, nothing else |
 | **Team Key Issuance** | Create scoped access tokens per team, each with an independently configurable RPM limit |
@@ -207,6 +209,47 @@ number, never below it.
 The guard is Redis-backed, so the limit stays correct even when you run multiple Nexus
 replicas behind a load balancer, and it **fails open** — if Redis is briefly unreachable,
 requests are allowed through rather than blocked.
+
+---
+
+## Resilience & routing
+
+### Circuit breaker
+
+Every key in the pool sits behind a per-key circuit breaker, so one failing provider
+never keeps taking traffic it can't serve. The breaker state lives in Redis, so it stays
+consistent across every Nexus replica.
+
+| Failure | How the breaker reacts |
+|---|---|
+| **5xx / timeout / hung stream** | Counts as a strike. After **3** consecutive strikes in a 5-minute window the key trips **open** and is skipped by the router. |
+| **Cooldown** | **Escalates** on each successive trip — 10s → 20s → 40s … doubling up to a 10-minute cap — so a key that keeps failing is pushed further away instead of being retried on the same fixed timer forever. |
+| **Half-open recovery** | When the cooldown expires the router lets exactly **one** trial request through. Success closes the breaker and resets the streak; failure re-escalates without dumping full traffic back onto a still-dead provider. |
+| **429 (rate limited)** | Handled **separately** — a flat, non-escalating cooldown. A rate limit is expected back-pressure, not an outage, so it never feeds the strike counter. |
+| **401 / 403 (auth)** | A bad credential won't fix itself. **2** consecutive auth failures **ban** the key outright rather than merely cooling it. |
+
+Any success at any point resets the streak to zero. Cooling and banned keys are reflected
+live in the dashboard; the admin **unban** action clears the breaker state as well.
+
+### Cache-aware sticky routing
+
+Provider prompt caching only pays off when a conversation's follow-up turns hit the **same**
+upstream key. Naïve round-robin (always pick the least-recently-used key) throws that cache
+away on every turn. Nexus instead pins a conversation to the key that last served it:
+
+- A session is identified by an explicit **`X-Nexus-Session`** header or the OpenAI **`user`**
+  field if you send one, and otherwise by a stable fingerprint of the opening messages.
+- Follow-up turns prefer that key for a short window (matching provider cache lifetimes),
+  falling back to normal tier/LRU selection only for new sessions or when the pinned key is
+  cooling, banned, or out of headroom.
+- Sticky-routed responses carry an **`X-Nexus-Sticky: true`** header.
+
+> [!NOTE]
+> **Model exposure:** Nexus deliberately exposes a **single virtual model** — send
+> `model: "kinetic-nexus-1"` and the gateway routes across your pool by tier, health, and
+> cache affinity. This keeps the client contract to one stable name; task-class dispatch to
+> named virtual models (`nexus-fast`, `nexus-premium`, …) is intentionally out of scope for
+> now so the routing contract stays simple for early adopters.
 
 ---
 
