@@ -12,7 +12,7 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 ## [1.0.0] - 2026-07-09
 
 First tagged release and first published container image
-(`ghcr.io/kinetic-ide/alayra-nexus`).
+(`ghcr.io/alayra-systems-pvt-limited/alayra-nexus`).
 
 ### Added
 - **OpenAI-compatible proxy** (`/v1/chat/completions`) with full streaming
@@ -55,5 +55,5 @@ First tagged release and first published container image
 - Constant-time comparison and 2FA for admin auth (Phase 6) are not yet in place;
   protect the admin password and API key accordingly for now.
 
-[Unreleased]: https://github.com/Kinetic-Ide/alayra-nexus/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/Kinetic-Ide/alayra-nexus/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/releases/tag/v1.0.0

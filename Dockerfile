@@ -21,7 +21,7 @@ RUN apk add --no-cache openssl
 
 LABEL org.opencontainers.image.title="Alayra Nexus" \
       org.opencontainers.image.description="Open-source AI gateway — one OpenAI-compatible endpoint for every provider, with load balancing, failover, rate limits, and cost analytics." \
-      org.opencontainers.image.source="https://github.com/Kinetic-Ide/alayra-nexus" \
+      org.opencontainers.image.source="https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.vendor="Alayra Systems"
 

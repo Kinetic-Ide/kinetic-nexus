@@ -11,6 +11,30 @@
 
 ---
 
+**Date:** 2026-07-09 · Session 16  
+**Author:** Abbas  
+**Title:** Move Repository and Container Image Under the Alayra Systems Organization  
+
+**Summary:**  
+Moved the project to its permanent home under the Alayra Systems organization,
+matching the ownership to the brand now that Alayra Nexus™ is a distinct Alayra
+Systems product rather than a sibling hosted alongside the Kinetic IDE line. The
+repository transfer preserves all history, releases, and stars, and the previous
+location redirects automatically, so existing links and clones keep working.
+
+Every reference the project controls was repointed to the new organization: the
+repository URLs across the README badges, contributor guide, changelog links, issue
+templates, and the container image's source label, plus the maintainer and project
+links. The published container image moves with it — the release workflow now
+publishes to the organization's own registry namespace, and the quickstart and
+badges reference the new image path. References to the separate Kinetic IDE product
+and its website are intentionally left untouched, since that remains its own product.
+
+No application behaviour changes. Green gate: lint 0, typecheck 0, 93 tests pass,
+build 0. The v1.0.0 tag was re-cut so the image republishes under the new namespace.
+
+---
+
 **Date:** 2026-07-09 · Session 15  
 **Author:** Abbas  
 **Title:** Packaging & Release Readiness — Multi-Arch Container Image, CHANGELOG, and Versioning  

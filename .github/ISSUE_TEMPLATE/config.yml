@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/Kinetic-Ide/alayra-nexus/security/policy
+    url: https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/security/policy
     about: Please report security issues privately via our Security Policy — do not open a public issue.
   - name: Question or discussion
-    url: https://github.com/Kinetic-Ide/alayra-nexus/discussions
+    url: https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/discussions
     about: For usage questions and general discussion, please use Discussions.

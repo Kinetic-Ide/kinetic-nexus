@@ -10,10 +10,10 @@
 
 <br>
 
-[![CI](https://github.com/Kinetic-Ide/alayra-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/Kinetic-Ide/alayra-nexus/actions/workflows/ci.yml)
+[![CI](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-6d28d9.svg?style=for-the-badge)](./LICENSE)
-[![Release](https://img.shields.io/github/v/release/Kinetic-Ide/alayra-nexus?style=for-the-badge&color=0e7490)](https://github.com/Kinetic-Ide/alayra-nexus/releases)
-[![Container](https://img.shields.io/badge/ghcr.io-alayra--nexus-2496ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/Kinetic-Ide/alayra-nexus/pkgs/container/alayra-nexus)
+[![Release](https://img.shields.io/github/v/release/Alayra-Systems-Pvt-Limited/Alayra-Nexus?style=for-the-badge&color=0e7490)](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/releases)
+[![Container](https://img.shields.io/badge/ghcr.io-alayra--nexus-2496ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/pkgs/container/alayra-nexus)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3b82f6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-v5-22c55e.svg?style=for-the-badge)](https://fastify.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-f59e0b.svg?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -28,7 +28,7 @@ with full usage analytics and cost tracking built in.
 
 <br>
 
-> Built and maintained by **[Alayra Systems Pvt. Limited](https://github.com/Kinetic-Ide)** · Islamabad, Pakistan
+> Built and maintained by **[Alayra Systems Pvt. Limited](https://github.com/Alayra-Systems-Pvt-Limited)** · Islamabad, Pakistan
 
 <br>
 
@@ -130,7 +130,7 @@ docker run -d --name alayra-nexus -p 3000:3000 \
   -e REDIS_URL="redis://host:6379" \
   -e MASTER_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" \
   -e ADMIN_PASSWORD="change-me" \
-  ghcr.io/kinetic-ide/alayra-nexus:latest
+  ghcr.io/alayra-systems-pvt-limited/alayra-nexus:latest
 ```
 
 Pin a version for production (e.g. `:1.0.0`) rather than `:latest`.
@@ -138,7 +138,7 @@ Pin a version for production (e.g. `:1.0.0`) rather than `:latest`.
 ### Option B — Docker Compose (brings its own Postgres + Redis)
 
 ```bash
-git clone https://github.com/Kinetic-Ide/alayra-nexus.git
+git clone https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus.git
 cd alayra-nexus
 
 cp .env.example .env
@@ -156,7 +156,7 @@ Dashboard is live at `http://localhost:3000/dashboard`
 **Prerequisites:** Node.js 20+, PostgreSQL 15+, Redis 7+
 
 ```bash
-git clone https://github.com/Kinetic-Ide/alayra-nexus.git
+git clone https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus.git
 cd alayra-nexus
 
 npm install
@@ -476,7 +476,7 @@ The Apache 2.0 license covers the code; it does not grant rights to the name or 
 
 <div align="center">
 
-**Alayra Nexus** is part of the [Kinetic IDE](https://github.com/Kinetic-Ide) ecosystem —  
-sovereign AI infrastructure built for teams who refuse to depend on someone else's cloud.
+**Alayra Nexus™** is built by [Alayra Systems](https://github.com/Alayra-Systems-Pvt-Limited) —  
+sovereign AI infrastructure for teams who refuse to depend on someone else's cloud.
 
 </div>

@@ -5,8 +5,8 @@ set up, the quality bar we hold, and how to get a change merged.
 
 ## Ways to contribute
 
-- **Report a bug** — open a [bug report](https://github.com/Kinetic-Ide/alayra-nexus/issues/new?template=bug_report.yml).
-- **Request a feature** — open a [feature request](https://github.com/Kinetic-Ide/alayra-nexus/issues/new?template=feature_request.yml).
+- **Report a bug** — open a [bug report](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/issues/new?template=bug_report.yml).
+- **Request a feature** — open a [feature request](https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus/issues/new?template=feature_request.yml).
 - **Report a vulnerability** — see [SECURITY.md](./SECURITY.md). Please do **not** open a public issue for security problems.
 - **Submit a pull request** — see below.
 
@@ -15,7 +15,7 @@ set up, the quality bar we hold, and how to get a change merged.
 **Prerequisites:** Node.js 20+, PostgreSQL 15+, Redis 7+ (or just Docker).
 
 ```bash
-git clone https://github.com/Kinetic-Ide/alayra-nexus.git
+git clone https://github.com/Alayra-Systems-Pvt-Limited/Alayra-Nexus.git
 cd alayra-nexus
 npm install
 

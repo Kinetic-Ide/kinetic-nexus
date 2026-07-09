@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/kinetic-ide/alayra-nexus
+  IMAGE: ghcr.io/alayra-systems-pvt-limited/alayra-nexus
 
 jobs:
   image:
