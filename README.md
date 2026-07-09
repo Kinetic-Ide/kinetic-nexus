@@ -12,6 +12,8 @@
 
 [![CI](https://github.com/Kinetic-Ide/alayra-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/Kinetic-Ide/alayra-nexus/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-6d28d9.svg?style=for-the-badge)](./LICENSE)
+[![Release](https://img.shields.io/github/v/release/Kinetic-Ide/alayra-nexus?style=for-the-badge&color=0e7490)](https://github.com/Kinetic-Ide/alayra-nexus/releases)
+[![Container](https://img.shields.io/badge/ghcr.io-alayra--nexus-2496ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/Kinetic-Ide/alayra-nexus/pkgs/container/alayra-nexus)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3b82f6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-v5-22c55e.svg?style=for-the-badge)](https://fastify.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-f59e0b.svg?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -117,7 +119,23 @@ Alayra Nexus is the infrastructure layer that sits between your application and 
 
 ## Quick Start
 
-### Option A — Docker Compose (recommended)
+### Option A — Published image (fastest, no clone)
+
+A multi-arch image (amd64 + arm64) is published to the GitHub Container Registry. If
+you already have Postgres and Redis, run the gateway with one command:
+
+```bash
+docker run -d --name alayra-nexus -p 3000:3000 \
+  -e DATABASE_URL="postgresql://user:pass@host:5432/nexus" \
+  -e REDIS_URL="redis://host:6379" \
+  -e MASTER_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" \
+  -e ADMIN_PASSWORD="change-me" \
+  ghcr.io/kinetic-ide/alayra-nexus:latest
+```
+
+Pin a version for production (e.g. `:1.0.0`) rather than `:latest`.
+
+### Option B — Docker Compose (brings its own Postgres + Redis)
 
 ```bash
 git clone https://github.com/Kinetic-Ide/alayra-nexus.git
@@ -133,7 +151,7 @@ Dashboard is live at `http://localhost:3000/dashboard`
 
 ---
 
-### Option B — Manual Setup
+### Option C — Manual Setup
 
 **Prerequisites:** Node.js 20+, PostgreSQL 15+, Redis 7+
 

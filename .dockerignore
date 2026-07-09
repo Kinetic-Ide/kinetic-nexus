@@ -1,0 +1,24 @@
+# Dependencies and build output are (re)created inside the image.
+node_modules
+dist
+
+# Git, CI, and editor cruft.
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Secrets — never copy env files into an image layer.
+.env
+.env.*
+
+# Docs, brand assets, and internal planning — not needed at runtime.
+brand
+docs
+*.md
+!prisma/**
+
+# Logs / coverage / local scratch.
+coverage
+*.log

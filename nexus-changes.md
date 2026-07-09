@@ -11,6 +11,34 @@
 
 ---
 
+**Date:** 2026-07-09 · Session 15  
+**Author:** Abbas  
+**Title:** Packaging & Release Readiness — Multi-Arch Container Image, CHANGELOG, and Versioning  
+
+**Summary:**  
+Made Alayra Nexus™ installable as a first-class package rather than a repository you
+clone and build. A release workflow now builds a multi-architecture image (Intel and
+ARM, so it runs natively on cloud instances and Apple Silicon alike) and publishes it
+to the GitHub Container Registry on every version tag, meaning an operator can run the
+gateway with a single command against their own Postgres and Redis, without cloning
+anything. The container was hardened for production distribution: a build-time ignore
+file keeps dependencies, git history, brand assets, and — critically — environment
+files out of the image, closing a secret-leak path; the runtime image drops root and
+runs as an unprivileged user; a container healthcheck reports liveness against the
+service's own health endpoint; and standard image metadata records the title, source,
+license, and vendor.
+
+Adopted formal versioning: the project now follows semantic versioning with a
+Keep-a-Changelog changelog, and the public routing contract (the single virtual model
+name) is the surface that versioning covers. The README leads with a no-clone
+"published image" quickstart alongside the existing Compose and manual paths, and
+carries release and container badges.
+
+Green gate: lint 0, typecheck 0, 93 tests pass, build 0, npm audit 0 vulns. (The
+container image itself is built and verified by the release workflow in CI.)
+
+---
+
 **Date:** 2026-07-09 · Session 14  
 **Author:** Abbas  
 **Title:** Phase 4 — Async Analytics Pipeline  
