@@ -179,6 +179,74 @@ Dashboard is live at `http://localhost:3000/dashboard`
 
 ---
 
+## Connect your tools
+
+Alayra Nexus speaks the OpenAI API, so **any tool that lets you set a custom base URL works.** You only need three values:
+
+- **Base URL:** `http://<your-host>:3000/v1`
+- **API key:** a team key from the dashboard, sent as `Authorization: Bearer <key>`
+- **Model:** `alayra-nexus-1`
+
+### Cursor
+Settings → **Models** → enable **OpenAI API Key**, paste your team key, tick **Override OpenAI Base URL** and set it to `http://<your-host>:3000/v1`. Add a custom model named `alayra-nexus-1`.
+
+### Cline / Roo Code (VS Code)
+API Provider → **OpenAI Compatible** → Base URL `http://<your-host>:3000/v1`, API Key = your team key, Model ID `alayra-nexus-1`.
+
+### Continue.dev
+```json
+{
+  "models": [
+    {
+      "title": "Alayra Nexus",
+      "provider": "openai",
+      "model": "alayra-nexus-1",
+      "apiBase": "http://<your-host>:3000/v1",
+      "apiKey": "<your-team-key>"
+    }
+  ]
+}
+```
+
+### OpenAI SDK — Python
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://<your-host>:3000/v1", api_key="<your-team-key>")
+resp = client.chat.completions.create(
+    model="alayra-nexus-1",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+print(resp.choices[0].message.content)
+```
+
+### OpenAI SDK — Node
+```js
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "http://<your-host>:3000/v1",
+  apiKey: "<your-team-key>",
+});
+const resp = await client.chat.completions.create({
+  model: "alayra-nexus-1",
+  messages: [{ role: "user", content: "Hello" }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+### curl
+```bash
+curl http://<your-host>:3000/v1/chat/completions \
+  -H "Authorization: Bearer <your-team-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"alayra-nexus-1","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+> Streaming works everywhere — add `"stream": true` (or the client's streaming flag). Running Nexus behind TLS? Use your `https://…/v1` URL instead.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |

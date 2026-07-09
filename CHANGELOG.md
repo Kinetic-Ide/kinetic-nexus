@@ -9,6 +9,10 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
 ## [Unreleased]
 
+### Added
+- README "Connect your tools" section with copy-paste setup for Cursor, Cline / Roo
+  Code, Continue.dev, the OpenAI SDK (Python + Node), and curl.
+
 ## [1.0.0] - 2026-07-09
 
 First tagged release and first published container image
