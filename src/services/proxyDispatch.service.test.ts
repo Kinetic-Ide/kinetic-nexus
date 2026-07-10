@@ -1,0 +1,152 @@
+/*
+ * Copyright (c) 2026 Alayra Systems Pvt. Limited (Pakistan)
+ * & Alayra Systems LLC (USA).
+ *
+ * Alayra Nexus™ is a trademark of Alayra Systems. Use of the name or logo
+ * is not granted by the software license below.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * A copy of the License is in the LICENSE file at the repository root,
+ * or at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ * ANY KIND, either express or implied. See the License for details.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { FastifyReply } from 'fastify';
+
+const h = vi.hoisted(() => ({
+  route: null as null | Record<string, unknown>,
+  fetchImpl: null as null | ((url: string, init: Record<string, unknown>) => Promise<unknown>),
+}));
+
+vi.mock('./nexus.service', () => ({
+  discoverBestPool:    vi.fn(async () => h.route),
+  getNextCooldownSeconds: vi.fn(async () => 42),
+  reportSuccess:       vi.fn(async () => {}),
+  reportServerFailure: vi.fn(async () => {}),
+  reportRateLimit:     vi.fn(async () => {}),
+  reportAuthFailure:   vi.fn(async () => {}),
+}));
+vi.mock('./token.service',  () => ({ recordTokenUsage: vi.fn(async () => {}) }));
+vi.mock('../lib/admission', () => ({ reconcileTpm: vi.fn(async () => {}) }));
+vi.mock('../lib/url',       () => ({ assertSafeUrl: vi.fn(() => {}), stripTrailingSlash: (s: string) => s.replace(/\/$/, '') }));
+vi.mock('./ssrf.service',   () => ({ getSsrfPolicy: vi.fn(async () => ({})) }));
+vi.mock('./byok.service',   () => ({ resolveRequestScope: vi.fn(async () => ({ ownerTeamId: null, fallbackToShared: true, namespace: 'shared' })) }));
+vi.mock('./budget.service', () => ({ checkTeamBudget: vi.fn(async () => ({ allowed: true })) }));
+
+import { dispatchProxy, embeddingReserve, completionReserve, extractTokenUsage } from './proxyDispatch.service';
+import * as nexus from './nexus.service';
+import { recordTokenUsage } from './token.service';
+
+function fakeReply() {
+  const state = { status: 200, sent: undefined as unknown, headers: {} as Record<string, string> };
+  const reply = {
+    code(c: number) { state.status = c; return reply; },
+    header(k: string, v: string) { state.headers[k] = v; return reply; },
+    send(b: unknown) { state.sent = b; return reply; },
+  };
+  return { reply: reply as unknown as FastifyReply, state };
+}
+
+const okRoute = {
+  keyId: 'k1', decryptedKey: 'sk-real', baseUrl: 'https://api.example.com/v1', modelString: 'text-embed-3',
+  modelId: 'embed', providerSlug: 'openai', tier: 'standard', authHeader: 'Authorization', authPrefix: 'Bearer',
+  wasDowngrade: false, isProbe: false, sticky: false, byok: false,
+};
+
+let lastFetch: { url: string; init: Record<string, unknown> } | null = null;
+beforeEach(() => {
+  vi.clearAllMocks();
+  h.route = { ...okRoute };
+  lastFetch = null;
+  globalThis.fetch = vi.fn(async (url: string, init: Record<string, unknown>) => {
+    lastFetch = { url, init };
+    return (h.fetchImpl ? h.fetchImpl(url, init) : { ok: true, status: 200, json: async () => ({ usage: { prompt_tokens: 7 } }) }) as unknown;
+  }) as unknown as typeof fetch;
+});
+
+describe('pure helpers', () => {
+  it('embeddingReserve counts a string or array input', () => {
+    expect(embeddingReserve({ input: 'hello world' })).toBeGreaterThan(0);
+    expect(embeddingReserve({ input: ['a', 'b'] })).toBeGreaterThan(0);
+  });
+  it('completionReserve adds the output cap to the prompt', () => {
+    expect(completionReserve({ prompt: 'x', max_tokens: 100 })).toBeGreaterThan(100);
+  });
+  it('extractTokenUsage reads embeddings (input only) and completions (both)', () => {
+    expect(extractTokenUsage({ usage: { prompt_tokens: 5 } })).toEqual({ input: 5, output: 0 });
+    expect(extractTokenUsage({ usage: { prompt_tokens: 5, completion_tokens: 9 } })).toEqual({ input: 5, output: 9 });
+    expect(extractTokenUsage({})).toEqual({ input: 0, output: 0 });
+  });
+});
+
+describe('dispatchProxy — success', () => {
+  it('forwards to the provider path with the routed model, dropping any stream flag', async () => {
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ input: 'hi', model: 'whatever', stream: true }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3 });
+
+    expect(lastFetch!.url).toBe('https://api.example.com/v1/embeddings');
+    const body = JSON.parse(lastFetch!.init.body as string);
+    expect(body.model).toBe('text-embed-3');   // routed model, not "whatever"
+    expect(body.stream).toBeUndefined();        // one-shot
+    expect(state.status).toBe(200);
+    expect(state.headers['X-Nexus-Model']).toBe('text-embed-3');
+  });
+
+  it('reports success and records usage attributed to the registry model id', async () => {
+    const { reply } = fakeReply();
+    h.fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ usage: { prompt_tokens: 11, completion_tokens: 4 } }) });
+    await dispatchProxy({ input: 'hi' }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3, teamKeyId: 'tk' });
+
+    expect(nexus.reportSuccess).toHaveBeenCalledWith('k1', false);
+    expect(recordTokenUsage).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'embed', inputTokens: 11, outputTokens: 4, nexusTeamKeyId: 'tk' }));
+  });
+});
+
+describe('dispatchProxy — failures feed the breaker', () => {
+  it('returns 503 with a capability-specific message when no model is available', async () => {
+    h.route = null;
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ input: 'hi' }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3 });
+    expect(state.status).toBe(503);
+    expect(String((state.sent as Record<string, unknown>).error)).toContain('embedding');
+  });
+
+  it('cools the key on a 429', async () => {
+    h.fetchImpl = async () => ({ ok: false, status: 429, text: async () => 'slow down' });
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ input: 'hi' }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3 });
+    expect(nexus.reportRateLimit).toHaveBeenCalledWith('k1');
+    expect(state.status).toBe(429);
+  });
+
+  it('strikes the breaker on a 5xx', async () => {
+    h.fetchImpl = async () => ({ ok: false, status: 502, text: async () => 'bad gateway' });
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ input: 'hi' }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3 });
+    expect(nexus.reportServerFailure).toHaveBeenCalledWith('k1', false);
+    expect(state.status).toBe(502);
+  });
+
+  it('bans on repeated auth failure signal (401)', async () => {
+    h.fetchImpl = async () => ({ ok: false, status: 401, text: async () => 'nope' });
+    const { reply } = fakeReply();
+    await dispatchProxy({ input: 'hi' }, reply, { capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3 });
+    expect(nexus.reportAuthFailure).toHaveBeenCalledWith('k1');
+  });
+
+  it('does not call the provider when the team budget is exhausted', async () => {
+    const budget = await import('./budget.service');
+    vi.mocked(budget.checkTeamBudget).mockResolvedValueOnce({ allowed: false, spendUsd: 10, retryAfterSeconds: 60 } as never);
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ input: 'hi' }, reply, {
+      capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: 3,
+      team: { id: 't1', budgetUsd: 5, budgetPeriod: 'monthly' },
+    });
+    expect(state.status).toBe(429);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});

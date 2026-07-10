@@ -528,13 +528,18 @@ Watch adoption with the `nexus_byok_requests_total{result}` metric — a sustain
 ```
 POST /v1/chat/completions   OpenAI Chat Completions (streaming + non-streaming)
 POST /v1/messages           Anthropic Messages (streaming + non-streaming)
+POST /v1/embeddings         OpenAI Embeddings — for RAG / vector search
+POST /v1/completions        OpenAI legacy completions — fill-in-the-middle / autocomplete
 GET  /v1/models             Model discovery (OpenAI + Anthropic shape)
 ```
 
-Both proxy endpoints run through the same routing, failover, budgets, guardrails,
-cache, and analytics — `/v1/messages` is translated to and from the OpenAI shape at the
-edge, not a separate path. Authenticate with `Authorization: Bearer <key>` or, for
-Anthropic clients, `x-api-key: <key>`.
+Every proxy endpoint runs through the same model-first routing, failover, circuit
+breaker, budgets, and analytics — the non-chat endpoints are a thin transport over the
+same core, not a separate path. Each selects a model by **capability**: `/v1/embeddings`
+needs a model with the `embedding` capability, `/v1/completions` one with `completion`,
+and so on. If none is configured the endpoint answers `503` naming the missing
+capability rather than failing obscurely. Authenticate with `Authorization: Bearer
+<key>` or, for Anthropic clients, `x-api-key: <key>`.
 
 ```bash
 curl http://localhost:3000/v1/chat/completions \

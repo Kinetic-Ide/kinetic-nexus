@@ -11,6 +11,56 @@
 
 ---
 
+**Date:** 2026-07-11 · Session 29  
+**Author:** Abbas  
+**Title:** Phase 6.3 — Embeddings and Legacy Completions  
+
+**Summary:**  
+With the Anthropic dialect in place, the gateway still answered only conversational
+requests. A great deal of real work is not a conversation: a retrieval system turns
+documents into vectors through an embeddings endpoint, and an editor's autocomplete
+fills in the middle of a line through the older completions endpoint. Neither has
+messages, neither is a chat, and so neither could pass through the chat handler, which
+is built around messages from end to end. This phase adds both endpoints, and it does
+so without standing up a second gateway beside the first.
+
+The distinction that made this clean is between routing and transport. Routing — which
+model, which key, which provider, whether the breaker allows it, whether the team is
+within budget, whether a private key must be preferred, and how the result is
+accounted — is the hard, careful part, and it is already shared. Transport is merely the
+shape of the request and reply on the wire, and a non-conversational request has a
+simpler shape than a chat one: a body in, a body out, no streaming, no output to
+inspect. So the new endpoints keep the entire routing and resilience path unchanged and
+add only a lean transport around it. A request selects a model by the capability the
+endpoint needs, is forwarded to the provider with the model the gateway chose in place
+of whatever the client named, and the response's token counts are recorded against that
+real model exactly as chat does. Every failure mode is handled the same way it is for
+chat: a rate limit cools the key, a server error strikes the breaker, an authentication
+failure moves toward banning it, and a timeout refunds the reserved capacity.
+
+Because selection is now by capability, an endpoint that has no model to serve it does
+not fail obscurely. A request for embeddings when no embedding-capable model is
+configured returns a plain refusal that names the missing capability and points at the
+Models tab, rather than a generic rate-limit message that would send an operator
+looking in the wrong place. The endpoint always exists; whether it can be served is a
+matter of configuration, and the response says so.
+
+Both of these modalities are measured in tokens, which is what the usage pipeline
+already records, so they needed no change to how spend is tracked. The remaining
+modalities do not fit that shape — an image is billed per image, synthesized speech per
+character, a transcription per second of audio — and honest accounting for them needs a
+unit alongside the count. That is a schema change, and rather than fold it into this
+phase it is deliberately held for the next, where images and audio are added together
+with the accounting they actually require. Keeping this phase to the two token-shaped
+endpoints kept it free of a migration and fully covered by tests: the reserve
+estimates, the usage extraction, and the whole forward-and-report path driven through
+stubbed routing to confirm success records usage and each upstream failure feeds the
+breaker.
+
+**Green gate:** lint 0 · typecheck 0 · 298 tests pass (+10) · build 0 · npm audit 0 vulnerabilities.
+
+---
+
 **Date:** 2026-07-11 · Session 28  
 **Author:** Abbas  
 **Title:** Phase 6.2 — The Anthropic Messages API  

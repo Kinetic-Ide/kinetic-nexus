@@ -1,0 +1,190 @@
+/*
+ * Copyright (c) 2026 Alayra Systems Pvt. Limited (Pakistan)
+ * & Alayra Systems LLC (USA).
+ *
+ * Alayra Nexus™ is a trademark of Alayra Systems. Use of the name or logo
+ * is not granted by the software license below.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * A copy of the License is in the LICENSE file at the repository root,
+ * or at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ * ANY KIND, either express or implied. See the License for details.
+ */
+
+import type { FastifyReply } from 'fastify';
+import {
+  discoverBestPool, getNextCooldownSeconds,
+  reportSuccess, reportServerFailure, reportRateLimit, reportAuthFailure,
+} from './nexus.service';
+import { recordTokenUsage }     from './token.service';
+import { reconcileTpm }         from '../lib/admission';
+import { countTokens }          from '../lib/tokenizer';
+import { stripTrailingSlash, assertSafeUrl } from '../lib/url';
+import { getSsrfPolicy }         from './ssrf.service';
+import { checkTeamBudget, type BudgetPeriod } from './budget.service';
+import { resolveRequestScope }   from './byok.service';
+import { isByok, isIsolated }    from '../lib/scope';
+import type { Capability }       from '../lib/modelSelect';
+import type { TeamContext }      from './completionsProxy.service';
+import * as metrics              from '../lib/metrics';
+
+// ── Generic non-chat dispatcher (Phase 6.3) ───────────────────────────────────
+// Embeddings, completions, and the modalities that follow are JSON in / JSON out with
+// no `messages`, no conversation, and no chat SSE — so they cannot reuse the chat
+// handler's body. What they *do* reuse is everything that matters: the same model-first
+// routing, circuit breaker, atomic admission, BYOK isolation, budgets, usage pipeline,
+// and SSRF guard. This dispatcher composes those shared primitives; it is not a second
+// routing path, only a second, simpler transport for non-chat request shapes.
+
+const UPSTREAM_TTFT_MS = parseInt(process.env.UPSTREAM_TTFT_MS ?? '20000', 10);
+const UPSTREAM_BODY_MS = parseInt(process.env.UPSTREAM_BODY_MS ?? '60000', 10);
+const DEFAULT_MAX_TOKENS_RESERVE = parseInt(process.env.NEXUS_DEFAULT_MAX_TOKENS ?? '2048', 10);
+
+export interface DispatchOptions {
+  capability:   Capability;   // which model capability serves this endpoint
+  upstreamPath: string;       // '/embeddings' | '/completions'
+  reserveTokens: number;      // TPM admission reserve
+  team?:        TeamContext;
+  teamKeyId?:   string;
+}
+
+/** Token usage from a non-chat response. Embeddings report input only. */
+export function extractTokenUsage(data: Record<string, unknown>): { input: number; output: number } {
+  const u = (data.usage ?? {}) as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+  return { input: Number(u.prompt_tokens ?? u.total_tokens ?? 0), output: Number(u.completion_tokens ?? 0) };
+}
+
+/** Estimated tokens in an /embeddings request (`input` is a string or array of strings). */
+export function embeddingReserve(body: Record<string, unknown>): number {
+  const input = body.input;
+  const text = Array.isArray(input) ? input.map(String).join('\n') : String(input ?? '');
+  return Math.max(1, countTokens(text));
+}
+
+/** Estimated reserve for a /completions request: prompt tokens plus the output cap. */
+export function completionReserve(body: Record<string, unknown>): number {
+  const prompt = body.prompt;
+  const text = Array.isArray(prompt) ? prompt.map(String).join('\n') : String(prompt ?? '');
+  const max = typeof body.max_tokens === 'number' ? body.max_tokens : DEFAULT_MAX_TOKENS_RESERVE;
+  return Math.max(1, countTokens(text)) + Math.max(0, max);
+}
+
+/**
+ * Forward a non-chat request through the shared routing + resilience path. `body` is a
+ * plain JSON object; the model is replaced with the one routing selected, and the call
+ * goes to `opts.upstreamPath` on the chosen provider. Streaming is not offered here —
+ * these modalities are one-shot — so any `stream` flag is dropped.
+ */
+export async function dispatchProxy(
+  body: Record<string, unknown>,
+  reply: FastifyReply,
+  opts: DispatchOptions,
+): Promise<FastifyReply | void> {
+  const t0 = Date.now();
+  let tier: string | undefined = undefined; // set once a route is chosen (read in the closure before then)
+  const observe = (o: metrics.RequestOutcome) => metrics.observeRequest(o, tier, (Date.now() - t0) / 1000);
+  const { team, teamKeyId, capability, upstreamPath, reserveTokens } = opts;
+
+  // Team budget gate — before any provider work.
+  if (team && team.budgetUsd != null) {
+    const budget = await checkTeamBudget(team.id, team.budgetUsd, team.budgetPeriod as BudgetPeriod);
+    if (!budget.allowed) {
+      observe('budget_blocked');
+      return reply.code(429).header('Retry-After', String(budget.retryAfterSeconds))
+        .send({ error: `Team budget exhausted: $${budget.spendUsd.toFixed(4)} of $${team.budgetUsd} used. Resets in ${budget.retryAfterSeconds}s.`, retryAfter: budget.retryAfterSeconds });
+    }
+  }
+
+  const scope = await resolveRequestScope(team);
+  const route = await discoverBestPool(reserveTokens, null, scope, capability);
+  if (!route) {
+    observe('no_capacity');
+    if (isIsolated(scope)) metrics.byokRequest('isolated_block');
+    const retryAfter = await getNextCooldownSeconds();
+    return reply.code(503).header('Retry-After', String(retryAfter)).send({
+      error: `No available model for "${capability}". Add a ${capability}-capable model in the Models tab, or all matching keys are rate-limited (retry in ${retryAfter}s).`,
+      retryAfter,
+    });
+  }
+
+  tier = route.tier;
+  metrics.providerRequest(route.providerSlug);
+  if (isByok(scope)) metrics.byokRequest(route.byok ? 'own' : 'fallback');
+
+  const keyId = route.keyId;
+  const refund = () => { void reconcileTpm(keyId, reserveTokens, 0).catch(() => {}); };
+
+  try {
+    assertSafeUrl(stripTrailingSlash(route.baseUrl), await getSsrfPolicy());
+  } catch (err) {
+    refund(); observe('ssrf_blocked');
+    return reply.code(502).send({ error: err instanceof Error ? err.message : 'Upstream blocked by SSRF policy.' });
+  }
+
+  const url = `${stripTrailingSlash(route.baseUrl)}${upstreamPath}`;
+  // Nexus decides the model; drop any streaming request — these endpoints are one-shot.
+  const { stream: _stream, ...rest } = body;
+  const upstreamBody = { ...rest, model: route.modelString };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    [route.authHeader]: `${route.authPrefix ?? 'Bearer'} ${route.decryptedKey}`,
+  };
+
+  const controller = new AbortController();
+  let ttft: ReturnType<typeof setTimeout> | null = setTimeout(() => controller.abort(), UPSTREAM_TTFT_MS);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, { method: 'POST', headers, body: JSON.stringify(upstreamBody), signal: controller.signal });
+  } catch (err) {
+    if (ttft) clearTimeout(ttft);
+    refund();
+    await reportServerFailure(keyId, route.isProbe);
+    metrics.providerError(route.providerSlug, 'timeout');
+    observe('upstream_error');
+    const aborted = err instanceof Error && err.name === 'AbortError';
+    return reply.code(504).send({ error: aborted ? 'Upstream timed out before responding.' : 'Upstream connection failed.' });
+  }
+  if (ttft) { clearTimeout(ttft); ttft = null; }
+  metrics.observeTtfb((Date.now() - t0) / 1000);
+
+  if (!upstream.ok) {
+    const errText = await upstream.text().catch(() => 'Upstream error');
+    if (upstream.status === 429)                                  { await reportRateLimit(keyId);  metrics.providerError(route.providerSlug, 'rate_limit'); }
+    else if (upstream.status === 401 || upstream.status === 403)  { await reportAuthFailure(keyId); metrics.providerError(route.providerSlug, 'auth'); }
+    else if (upstream.status >= 500)                              { await reportServerFailure(keyId, route.isProbe); metrics.providerError(route.providerSlug, 'server'); }
+    refund();
+    observe(upstream.status >= 500 || upstream.status === 429 || upstream.status === 401 || upstream.status === 403 ? 'upstream_error' : 'client_error');
+    return reply.code(upstream.status).send(errText);
+  }
+
+  let data: Record<string, unknown>;
+  const bodyTimer = setTimeout(() => controller.abort(), UPSTREAM_BODY_MS);
+  try {
+    data = await upstream.json() as Record<string, unknown>;
+  } catch {
+    clearTimeout(bodyTimer); refund(); observe('upstream_error');
+    return reply.code(504).send({ error: 'Upstream response timed out or was malformed.' });
+  }
+  clearTimeout(bodyTimer);
+
+  // Clean success: close the breaker (no sticky — these are not conversational).
+  void reportSuccess(keyId, route.isProbe).catch(() => {});
+  const { input, output } = extractTokenUsage(data);
+  observe('success');
+  metrics.addTokens(input, output);
+  void reconcileTpm(keyId, reserveTokens, input + output).catch(() => {});
+  void recordTokenUsage({
+    sessionId: `${capability}-${Date.now()}`, modelId: route.modelId ?? route.modelString, modelName: route.modelString,
+    provider: route.providerSlug, inputTokens: input, outputTokens: output,
+    nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod,
+  }).catch(() => {});
+
+  reply.header('X-Nexus-Model', route.modelString);
+  reply.header('X-Nexus-Provider', route.providerSlug);
+  reply.header('X-Nexus-Tier', route.tier);
+  return reply.code(200).send(data);
+}

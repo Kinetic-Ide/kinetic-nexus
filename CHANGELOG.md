@@ -10,6 +10,14 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 ## [Unreleased]
 
 ### Added
+- **Embeddings and legacy completions — `POST /v1/embeddings`, `POST /v1/completions`
+  (Phase 6.3).** `/v1/embeddings` unlocks RAG stacks (LangChain, LlamaIndex, vector
+  search); `/v1/completions` is the fill-in-the-middle / autocomplete endpoint. Both run
+  through the same model-first routing, circuit breaker, admission control, BYOK
+  isolation, budgets, and analytics as chat — a thin non-chat transport over the shared
+  core, not a second routing path. Each selects a model by capability (`embedding`,
+  `completion`); if none is configured the endpoint returns `503` naming the missing
+  capability. Usage and cost are recorded per request against the real model.
 - **Anthropic Messages API — `POST /v1/messages` (Phase 6.2).** Alayra Nexus now speaks
   Anthropic's protocol as well as OpenAI's, so **Claude Code** and the Anthropic SDKs
   route through the same gateway. Point Claude Code at it with

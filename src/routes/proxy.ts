@@ -20,6 +20,7 @@ import { handleProxy }    from '../services/completionsProxy.service';
 import type { CompletionsBody } from '../services/completionsProxy.service';
 import { anthropicToOpenAI } from '../lib/anthropic';
 import { createAnthropicReply } from '../lib/anthropicReply';
+import { dispatchProxy, embeddingReserve, completionReserve } from '../services/proxyDispatch.service';
 
 export default async function proxyRoutes(fastify: FastifyInstance) {
   fastify.post('/v1/chat/completions', { preHandler: [verifyApiKey] }, async (request, reply) => {
@@ -35,6 +36,26 @@ export default async function proxyRoutes(fastify: FastifyInstance) {
     const openaiBody = anthropicToOpenAI(request.body as Record<string, unknown>) as unknown as CompletionsBody;
     const { reply: anthropicReply } = createAnthropicReply(reply);
     return handleProxy(openaiBody, anthropicReply, request.teamKeyId, request.headers as Record<string, unknown>, request.team);
+  });
+
+  // Embeddings (Phase 6.3) — unlocks RAG stacks (LangChain, LlamaIndex, …). Routed to a
+  // model that declares the `embedding` capability, through the same resilience path.
+  fastify.post('/v1/embeddings', { preHandler: [verifyApiKey] }, async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    return dispatchProxy(body, reply, {
+      capability: 'embedding', upstreamPath: '/embeddings', reserveTokens: embeddingReserve(body),
+      team: request.team, teamKeyId: request.teamKeyId,
+    });
+  });
+
+  // Legacy completions (Phase 6.3) — the fill-in-the-middle / autocomplete endpoint,
+  // served by a model that declares the `completion` capability. One-shot (non-stream).
+  fastify.post('/v1/completions', { preHandler: [verifyApiKey] }, async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    return dispatchProxy(body, reply, {
+      capability: 'completion', upstreamPath: '/completions', reserveTokens: completionReserve(body),
+      team: request.team, teamKeyId: request.teamKeyId,
+    });
   });
 
   // Model discovery. Returned as a superset that satisfies both an OpenAI client
