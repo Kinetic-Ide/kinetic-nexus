@@ -11,6 +11,34 @@
 
 ---
 
+**Date:** 2026-07-10 · Session 23  
+**Author:** Abbas  
+**Title:** Brand — Generated Banners for README, X, and the Social Card  
+
+**Summary:**  
+The project now has a banner set: a hero for the top of the README, a header sized for
+an X profile, and the social card GitHub serves when the repository is linked
+anywhere. All three are generated rather than drawn. A build script lifts the crest
+out of the canonical artwork and composes each layout around it, so the mark cannot
+drift out of sync across surfaces the way hand-maintained exports always eventually
+do. Editing the crest and re-running the script updates every banner at once.
+
+Two constraints shaped the layouts. X renders a profile header at roughly a fifth of
+its upload canvas, so that variant carries larger type, drops the fine print, and
+seats the crest on the right, where the profile avatar — itself the crest — cannot
+overlap it. And because both X and GitHub re-compress on high-density displays, the
+exports ship at twice their nominal size; the single-density files are kept only as
+fallbacks and are explicitly marked as the wrong thing to upload. The brand
+documentation now records which file belongs on which surface, so the question does
+not have to be answered twice.
+
+The hero reference had been added to the README a commit earlier while the image
+itself was still untracked, which left the front page of the repository showing a
+broken image for the few minutes between the two pushes. Both are now committed
+together.
+
+---
+
 **Date:** 2026-07-10 · Session 22  
 **Author:** Abbas  
 **Title:** Phase 5.6 — Structural Split, Architecture Docs, and a Silent Packaging Defect  
