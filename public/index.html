@@ -501,6 +501,13 @@ function showTab(name) {
   if (name==='settings')  loadSettings();
 }
 
+// Values that reach a `data-copy` attribute are never re-parsed as markup or code,
+// so a base URL or key containing quotes stays inert.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.copy-btn[data-copy]');
+  if (btn) copyText(btn.dataset.copy, btn);
+});
+
 // ── Connect ────────────────────────────────────────────────────────
 async function loadConnect() {
   if (window._demoMode) return;
@@ -509,11 +516,11 @@ async function loadConnect() {
     const key = cfg.nexusApiKey || '';
     const masked = key.slice(0,8) + '••••••••' + key.slice(-4);
     document.getElementById('connect-rows').innerHTML = `
-      <div class="copy-row"><span class="copy-label">Base URL</span><span class="copy-val">${cfg.baseUrl}</span><button class="copy-btn" onclick="copyText('${cfg.baseUrl}',this)">Copy</button></div>
-      <div class="copy-row"><span class="copy-label">Model</span><span class="copy-val">alayra-nexus-1</span><button class="copy-btn" onclick="copyText('alayra-nexus-1',this)">Copy</button></div>
-      <div class="copy-row"><span class="copy-label">API Key</span><span class="copy-val">${masked}</span><button class="copy-btn" onclick="copyText('${key}',this)">Copy</button></div>`;
+      <div class="copy-row"><span class="copy-label">Base URL</span><span class="copy-val">${esc(cfg.baseUrl)}</span><button class="copy-btn" data-copy="${esc(cfg.baseUrl)}">Copy</button></div>
+      <div class="copy-row"><span class="copy-label">Model</span><span class="copy-val">alayra-nexus-1</span><button class="copy-btn" data-copy="alayra-nexus-1">Copy</button></div>
+      <div class="copy-row"><span class="copy-label">API Key</span><span class="copy-val">${esc(masked)}</span><button class="copy-btn" data-copy="${esc(key)}">Copy</button></div>`;
     loadRoutingStatus();
-  } catch(e) { document.getElementById('connect-rows').innerHTML = `<div style="color:var(--red);font-size:13px">${e.message}</div>`; }
+  } catch(e) { document.getElementById('connect-rows').innerHTML = `<div style="color:var(--red);font-size:13px">${esc(e.message)}</div>`; }
 }
 
 async function loadRoutingStatus() {
@@ -696,7 +703,10 @@ async function testProvKey(id, btn) {
     btn.textContent = r.success ? `✓ ${r.latencyMs}ms` : '✗ fail';
     btn.style.color = r.success ? 'var(--green)' : 'var(--red)';
     setTimeout(() => { btn.textContent=orig; btn.style.color=''; btn.disabled=false; }, 3000);
-  } catch { btn.textContent='err'; btn.disabled=false; }
+  } catch {
+    btn.textContent='err'; btn.style.color='var(--red)';
+    setTimeout(() => { btn.textContent=orig; btn.style.color=''; btn.disabled=false; }, 3000);
+  }
 }
 
 // ── Add provider modal ──────────────────────────────────────────────
@@ -1138,21 +1148,25 @@ async function submitModel(existingId) {
   } catch(e) { toast(e.message, true); }
 }
 
+// The registry is mutated optimistically for a snappy UI, but a failed PUT must
+// roll it back — otherwise the next save ships the local (rejected) state.
 async function setModelStatus(id, status) {
+  const previous = modelRegistry;
   modelRegistry = modelRegistry.map(m => m.id === id ? {...m, status} : m);
   try {
     await PUT('/admin/models', { models: modelRegistry });
     toast(`Model ${status}`); loadModels();
-  } catch(e) { toast(e.message, true); }
+  } catch(e) { modelRegistry = previous; toast(e.message, true); }
 }
 
 async function deleteModel(id) {
   if (!confirm('Delete this model from the registry?')) return;
+  const previous = modelRegistry;
   modelRegistry = modelRegistry.filter(m => m.id !== id);
   try {
     await PUT('/admin/models', { models: modelRegistry });
     toast('Model deleted'); loadModels();
-  } catch(e) { toast(e.message, true); }
+  } catch(e) { modelRegistry = previous; toast(e.message, true); }
 }
 
 // ── Team Keys ──────────────────────────────────────────────────────
@@ -1171,12 +1185,12 @@ function renderTeamKeys() {
   el.innerHTML = `<div class="table-wrap"><table>
     <thead><tr><th>Name</th><th>Key (masked)</th><th>Created</th><th>Actions</th></tr></thead>
     <tbody>${teamKeys.map(k=>`<tr>
-      <td><strong>${k.name}</strong></td>
-      <td><span style="font-family:monospace;font-size:12px">${k.maskedKey}</span></td>
+      <td><strong>${esc(k.name)}</strong></td>
+      <td><span style="font-family:monospace;font-size:12px">${esc(k.maskedKey)}</span></td>
       <td style="color:var(--muted)">${new Date(k.createdAt).toLocaleDateString()}</td>
       <td><div style="display:flex;gap:6px">
-        <button class="btn-icon btn-sm" onclick="copyTeamKey('${k.id}')">Copy key</button>
-        <button class="btn-danger btn-sm" onclick="revokeTeamKey('${k.id}','${k.name}')">Revoke</button>
+        <button class="btn-icon btn-sm" data-id="${esc(k.id)}" onclick="copyTeamKey(this.dataset.id)">Copy key</button>
+        <button class="btn-danger btn-sm" data-id="${esc(k.id)}" data-name="${esc(k.name)}" onclick="revokeTeamKey(this.dataset.id, this.dataset.name)">Revoke</button>
       </div></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -1210,9 +1224,9 @@ async function submitCreateTeamKey() {
 
 function showFullKeyModal(name, key) {
   document.getElementById('modal-box').innerHTML = `
-    <div class="modal-title">Key for ${name}</div>
+    <div class="modal-title">Key for ${esc(name)}</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Copy this key now. It won't be shown again.</p>
-    <div class="copy-row"><span class="copy-val" style="font-family:monospace">${key}</span><button class="copy-btn" onclick="copyText('${key}',this)">Copy</button></div>
+    <div class="copy-row"><span class="copy-val" style="font-family:monospace">${esc(key)}</span><button class="copy-btn" data-copy="${esc(key)}">Copy</button></div>
     <div class="form-actions" style="margin-top:12px"><button class="btn-primary" onclick="closeModal()">Done</button></div>`;
   openModal();
 }
@@ -1373,9 +1387,13 @@ function _buildReqChart(teamTs, byDay) {
   const teams  = [...new Set(teamTs.map(r => r.teamName))];
   let datasets;
   if (teams.length) {
+    // One pass to index by date+team, so the nested map below is O(1) per cell
+    // rather than a linear scan of teamTs.
+    const reqLookup = new Map();
+    teamTs.forEach(r => { const k = r.date+'|'+r.teamName; if (!reqLookup.has(k)) reqLookup.set(k, r.requests || 0); });
     datasets = teams.map((team, i) => {
       const c = CHART_PALETTE[i % CHART_PALETTE.length];
-      return { label: team, data: dates.map(date => { const r = teamTs.find(x => x.date===date && x.teamName===team); return r ? r.requests : 0; }),
+      return { label: team, data: dates.map(date => reqLookup.get(date+'|'+team) || 0),
         borderColor: c, backgroundColor: c+'18', borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:0.35, fill:false };
     });
   } else {
@@ -1394,9 +1412,11 @@ function _buildTokChart(modelTs) {
   if (!modelTs || !modelTs.length) { canvas.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px">No data yet</div>'; return; }
   const dates  = [...new Set(modelTs.map(r => r.date))].sort();
   const models = [...new Set(modelTs.map(r => r.model))];
+  const tokLookup = new Map();
+  modelTs.forEach(r => { const k = r.date+'|'+r.model; if (!tokLookup.has(k)) tokLookup.set(k, r.tokens || 0); });
   const datasets = models.map((model, i) => {
     const c = CHART_PALETTE[i % CHART_PALETTE.length];
-    return { label: model, data: dates.map(date => { const r = modelTs.find(x => x.date===date && x.model===model); return r ? r.tokens : 0; }),
+    return { label: model, data: dates.map(date => tokLookup.get(date+'|'+model) || 0),
       backgroundColor: c + 'cc', borderColor: c, borderWidth:1 };
   });
   _charts['tok'] = new Chart(canvas, { type:'bar', data:{ labels: dates.map(fmtDateLbl), datasets },
