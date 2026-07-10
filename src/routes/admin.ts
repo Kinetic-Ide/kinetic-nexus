@@ -31,6 +31,7 @@ import { getSsrfPolicy, getSsrfConfig, setSsrfConfig } from '../services/ssrf.se
 import { getGuardrailConfigForUI, setGuardrailConfig } from '../services/guardrails.service';
 import { getRoutingConfigForUI, setCostWeight } from '../services/routing.service';
 import { getCurrentSpend, type BudgetPeriod } from '../services/budget.service';
+import { getCacheConfigForUI, setCacheConfig } from '../services/cache.service';
 import { redis }               from '../lib/redis';
 import { REGISTRY_CACHE_KEY }  from '../lib/registryCacheKey';
 
@@ -132,6 +133,23 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     const body = routingSchema.parse(request.body);
     await setCostWeight(body.costWeight);
     return reply.send(await getRoutingConfigForUI());
+  });
+
+  // ── Response cache ────────────────────────────────────────────────
+
+  fastify.get('/admin/settings/cache', adminGuard, async (_req, reply) => {
+    return reply.send(await getCacheConfigForUI());
+  });
+
+  const cacheSchema = z.object({
+    enabled:    z.boolean(),
+    ttlSeconds: z.number().int().min(1).max(2592000), // up to 30 days
+  });
+
+  fastify.put('/admin/settings/cache', adminGuard, async (request, reply) => {
+    const body = cacheSchema.parse(request.body);
+    await setCacheConfig(body.enabled, body.ttlSeconds);
+    return reply.send(await getCacheConfigForUI());
   });
 
   // ── Providers ─────────────────────────────────────────────────────

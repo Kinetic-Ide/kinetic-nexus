@@ -399,6 +399,18 @@ tr:hover td{background:rgba(255,255,255,.02)}
           <input type="range" id="cw-range" min="0" max="1" step="0.1" value="0" style="width:100%" oninput="document.getElementById('cw-val').textContent=this.value"/>
           <button class="btn btn-sm" style="margin-top:12px" onclick="saveRouting()">Save routing</button>
         </div>
+
+        <div class="card" style="max-width:500px;margin-top:16px">
+          <div class="card-title">Response cache</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Cache exact-match responses (same model, messages, and params). A repeat request is served straight from Redis — a real $0 call, the provider is skipped entirely. Off by default. Identical requests return the cached answer until the TTL expires.</p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="cache-enabled"/>
+            <span>Enable response caching</span>
+          </label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">TTL — seconds a cached response stays fresh</label>
+          <input type="number" id="cache-ttl" min="1" max="2592000" value="3600" style="width:160px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text)"/>
+          <div><button class="btn btn-sm" style="margin-top:12px" onclick="saveCache()">Save cache</button></div>
+        </div>
       </div>
 
     </main>
@@ -1515,6 +1527,7 @@ async function loadSettings() {
   } catch {}
   loadGuardrails();
   loadRouting();
+  loadCache();
 }
 
 async function saveSsrf() {
@@ -1569,6 +1582,25 @@ async function saveRouting() {
     await PUT('/admin/settings/routing', { costWeight });
     toast('Routing saved');
     loadRouting();
+  } catch(e) { toast(e.message, true); }
+}
+
+async function loadCache() {
+  if (window._demoMode) return;
+  try {
+    const c = await GET('/admin/settings/cache');
+    document.getElementById('cache-enabled').checked = !!c.enabled;
+    document.getElementById('cache-ttl').value = c.ttlSeconds ?? 3600;
+  } catch {}
+}
+
+async function saveCache() {
+  const enabled = document.getElementById('cache-enabled').checked;
+  const ttlSeconds = parseInt(document.getElementById('cache-ttl').value, 10) || 3600;
+  try {
+    await PUT('/admin/settings/cache', { enabled, ttlSeconds });
+    toast('Cache settings saved');
+    loadCache();
   } catch(e) { toast(e.message, true); }
 }
 

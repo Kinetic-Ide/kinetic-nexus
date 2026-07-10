@@ -11,6 +11,41 @@
 
 ---
 
+**Date:** 2026-07-10 · Session 20  
+**Author:** Abbas  
+**Title:** Phase 4.5 — Response Caching (Exact-Match)  
+
+**Summary:**  
+Added an optional response cache — the real-money complement to the cache-aware
+routing shipped earlier, and a genuinely different mechanism: rather than reusing a
+provider's own prompt cache, this caches the response itself. When enabled, a request
+that exactly matches an earlier one — same model, same messages, same generation
+parameters — is answered straight from Redis, skipping the provider entirely. That is
+a true zero-cost call, not merely a cheaper one.
+
+The design keeps the gateway's contracts intact. The cache is checked before routing,
+so only a miss falls through to provider selection; on a hit nothing downstream runs.
+The cache identity ignores whether the caller asked for streaming, so a streamed and a
+non-streamed request with identical content share one entry, and a hit is replayed in
+whichever mode the caller wants — a streamed hit is delivered as server-sent events for
+drop-in compatibility. Populating the cache from a streamed response reuses the buffer
+the streaming path already assembles for token accounting, adding no second copy. Every
+hit still emits a distinct usage event, valued at zero provider cost but attributed to
+the requesting team, so cost and analytics figures never silently drift and a free hit
+does not draw down a team's budget. Tool-call responses and multi-choice requests are
+deliberately left uncached, since a single stored answer cannot faithfully stand in for
+them.
+
+Caching is off by default and configurable from the dashboard or the environment, with
+a time-to-live governing freshness. Responses are tagged so a caller and the metrics
+endpoint can see hits, misses, and stores. Added unit coverage for the cache-key
+identity rules, the eligibility checks, and the streamed-content assembly (123 tests
+total, all green), and documented the feature — including how it differs from cache-
+aware routing — in the README. Semantic caching remains a noted, heavier extension for
+a later phase.
+
+---
+
 **Date:** 2026-07-09 · Session 19  
 **Author:** Abbas  
 **Title:** Release v1.1.0 — Teams & Budgets, Observability, and an Important Install Fix  

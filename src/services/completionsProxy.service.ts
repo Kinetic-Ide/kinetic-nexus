@@ -27,6 +27,8 @@ import { evaluateMessages, evaluateText, type CompiledRule } from '../lib/guardr
 import * as metrics                   from '../lib/metrics';
 import { startUpstreamSpan, SpanStatusCode } from '../lib/tracing';
 import { checkTeamBudget, type BudgetPeriod } from './budget.service';
+import { getCacheConfig }              from './cache.service';
+import { isCacheable, responseCacheKey, getCached, setCached, toCompletionJson, buildFromCompletion, buildFromStream } from '../lib/responseCache';
 
 export interface TeamContext {
   id:           string;
@@ -125,6 +127,24 @@ function toSingleSseChunk(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`;
 }
 
+/** Fire-and-forget: persist a non-streaming completion to the response cache. */
+function storeInCache(key: string | null, data: Record<string, unknown>, provider: string, ttl: number): void {
+  if (!key) return;
+  const entry = buildFromCompletion(data, provider); // null for tool-call-only / empty responses
+  if (!entry) return;
+  metrics.responseCache('store');
+  void setCached(key, entry, ttl).catch(() => {});
+}
+
+/** Fire-and-forget: persist a streamed completion, assembled from its buffer. */
+function storeStreamInCache(key: string | null, collected: string, model: string, provider: string, promptTokens: number, completionTokens: number, ttl: number): void {
+  if (!key) return;
+  const entry = buildFromStream(collected, model, provider, promptTokens, completionTokens);
+  if (!entry.content) return; // empty / tool-call-only stream — nothing to replay
+  metrics.responseCache('store');
+  void setCached(key, entry, ttl).catch(() => {});
+}
+
 export async function handleProxy(
   body: CompletionsBody,
   reply: FastifyReply,
@@ -195,6 +215,46 @@ export async function handleProxy(
   const bufferStream = isStream && outputFiltering && guard.bufferedSafe;
   if (isStream && outputFiltering && !guard.bufferedSafe) {
     guardHeaders['X-Nexus-Guardrails-Output'] = 'skipped-streaming';
+  }
+
+  // ── Response cache (Phase 4.5) — exact-match, checked BEFORE routing. A hit is
+  // replayed straight from Redis (streamed if the client asked), skipping the
+  // provider entirely; only a miss falls through to routing.
+  const cacheCfg    = await getCacheConfig();
+  let cacheStoreKey: string | null = null;
+  if (cacheCfg.enabled && isCacheable(body)) {
+    const key = responseCacheKey(body);
+    const hit = await getCached(key);
+    if (hit) {
+      metrics.responseCache('hit');
+      observe('success');
+      // A cache hit is a $0 provider call, still attributed to the team so cost
+      // and analytics numbers stay honest.
+      void recordTokenUsage({
+        sessionId: `cache-${Date.now()}`, modelId: hit.model, modelName: hit.model, provider: hit.provider,
+        inputTokens: hit.promptTokens, outputTokens: hit.completionTokens,
+        nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod, cached: true,
+      }).catch(() => {});
+      const completion = toCompletionJson(hit);
+      const hitHeaders = { 'X-Nexus-Model': hit.model, 'X-Nexus-Provider': hit.provider, 'X-Nexus-Cache': 'hit' };
+      if (isStream) {
+        reply.hijack();
+        reply.raw.writeHead(200, {
+          'Content-Type':      'text/event-stream; charset=utf-8',
+          'Cache-Control':     'no-cache, no-transform',
+          'Connection':        'keep-alive',
+          'X-Accel-Buffering': 'no',
+          ...hitHeaders,
+        });
+        reply.raw.write(toSingleSseChunk(completion));
+        reply.raw.end();
+        return;
+      }
+      for (const [k, v] of Object.entries(hitHeaders)) reply.header(k, v);
+      return reply.code(200).send(completion);
+    }
+    metrics.responseCache('miss');
+    cacheStoreKey = key; // populate the cache from the response once it succeeds
   }
 
   const reserve  = computeReserve(effectiveMessages, body.max_tokens, DEFAULT_MAX_TOKENS_RESERVE);
@@ -294,6 +354,7 @@ export async function handleProxy(
     'X-Nexus-Tier':           route.tier,
     ...(route.wasDowngrade ? { 'X-Nexus-Tier-Downgrade': 'true' } : {}),
     ...(route.sticky        ? { 'X-Nexus-Sticky': 'true' } : {}),
+    ...(cacheStoreKey       ? { 'X-Nexus-Cache': 'miss' } : {}),
     ...guardHeaders,
   };
   // On a healthy response, close the breaker and pin this session to the key so
@@ -337,6 +398,7 @@ export async function handleProxy(
     const inputTokens  = usageObj?.prompt_tokens    ?? countMessageTokens(effectiveMessages);
     const outputTokens = usageObj?.completion_tokens ?? 1;
     observe('success'); metrics.addTokens(inputTokens, outputTokens);
+    storeInCache(cacheStoreKey, data, route.providerSlug, cacheCfg.ttlSeconds);
     void reconcileTpm(keyId, reserve, inputTokens + outputTokens).catch(() => {});
     void recordTokenUsage({ sessionId, modelId: route.modelString, modelName: route.modelString, provider: route.providerSlug, inputTokens, outputTokens, nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod }).catch(() => {});
     return;
@@ -383,6 +445,8 @@ export async function handleProxy(
     const inputTokens  = usage?.input  ?? countMessageTokens(effectiveMessages);
     const outputTokens = usage?.output ?? estimateDeltaTokens(collected);
     metrics.addTokens(inputTokens, outputTokens);
+    // Only cache a cleanly-completed stream; reuse the buffer already collected.
+    if (!streamFailed) storeStreamInCache(cacheStoreKey, collected, route.modelString, route.providerSlug, inputTokens, outputTokens, cacheCfg.ttlSeconds);
     void reconcileTpm(keyId, reserve, inputTokens + outputTokens).catch(() => {});
     void recordTokenUsage({ sessionId, modelId: route.modelString, modelName: route.modelString, provider: route.providerSlug, inputTokens, outputTokens, nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod }).catch(() => {});
     return;
@@ -413,6 +477,7 @@ export async function handleProxy(
   const inputTokens  = usageObj?.prompt_tokens     ?? countMessageTokens(effectiveMessages);
   const outputTokens = usageObj?.completion_tokens  ?? 1;
   observe('success'); metrics.addTokens(inputTokens, outputTokens);
+  storeInCache(cacheStoreKey, data, route.providerSlug, cacheCfg.ttlSeconds); // cache the post-guardrails response
   void reconcileTpm(keyId, reserve, inputTokens + outputTokens).catch(() => {});
   void recordTokenUsage({ sessionId, modelId: route.modelString, modelName: route.modelString, provider: route.providerSlug, inputTokens, outputTokens, nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod }).catch(() => {});
 

@@ -90,6 +90,13 @@ const providersGauge = new Gauge({
   registers: [registry],
 });
 
+const responseCacheTotal = new Counter({
+  name: 'nexus_response_cache_total',
+  help: 'Response-cache lookups by result (hit | miss | store).',
+  labelNames: ['result'],
+  registers: [registry],
+});
+
 // ── Recording helpers (called from the request path) ──────────────────────────
 
 export type RequestOutcome =
@@ -113,6 +120,7 @@ export function providerError(provider: string, kind: 'rate_limit' | 'auth' | 's
   providerErrors.inc({ provider, kind });
 }
 export function cacheHit(): void { cacheHits.inc(); }
+export function responseCache(result: 'hit' | 'miss' | 'store'): void { responseCacheTotal.inc({ result }); }
 
 // Refresh pool gauges from the DB. Called per scrape; a scrape is infrequent, so a
 // couple of lightweight queries here is fine, and it keeps utilization current.

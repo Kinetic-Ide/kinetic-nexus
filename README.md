@@ -356,6 +356,28 @@ are ranked last but never dropped.
 > named virtual models (`nexus-fast`, `nexus-premium`, …) is intentionally out of scope for
 > now so the routing contract stays simple for early adopters.
 
+### Response caching (optional)
+
+Distinct from cache-aware *routing* above (which reuses the **provider's** prompt cache),
+this caches the **response itself**. When enabled, an **exact-match** request — same model,
+messages, and generation params — is served straight from Redis, **skipping the provider
+entirely**: a real **$0** call. Off by default; turn it on under *Settings → Response cache*
+(or `CACHE_ENABLED` / `CACHE_TTL_SECONDS`).
+
+- The cache key excludes `stream` and `user`, so a streamed and a non-streamed request with
+  the same content share an entry — and a hit is **replayed in whichever mode the client
+  asked for** (drop-in compatible).
+- Every hit still emits a **$0 usage event** attributed to the team, so your cost and
+  analytics numbers stay honest (it doesn't consume budget). Responses carry
+  `X-Nexus-Cache: hit` / `miss`.
+- Tool-call responses and multi-choice (`n > 1`) requests are not cached. Identical requests
+  return the same cached answer until the TTL expires — enable it where that's what you want
+  (deterministic prompts, repeated evals, shared boilerplate).
+
+> [!NOTE]
+> Semantic caching (nearest-neighbour on prompt embeddings) is a heavier, opt-in
+> extension planned on top of this exact-match layer — not enabled today.
+
 ---
 
 ## Teams & budgets

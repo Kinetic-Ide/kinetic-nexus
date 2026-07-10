@@ -57,15 +57,20 @@ export interface RecordTokenUsageParams {
   // current budget window as soon as it is known.
   teamId?:           string;
   teamBudgetPeriod?: string;
+  // A response-cache hit: no provider was called, so it costs $0 and does not
+  // consume budget. Still recorded (attributed to the team) so analytics are honest.
+  cached?:           boolean;
 }
 
 export async function recordTokenUsage(p: RecordTokenUsageParams): Promise<void> {
   let estimatedUsd = 0;
-  try {
-    const registry = await getModelRegistry();
-    const m = registry.find(r => r.modelString === p.modelName || r.id === p.modelId) as Record<string, unknown> | undefined;
-    if (m) estimatedUsd = modelCost(m, p.inputTokens, p.outputTokens);
-  } catch { /* non-fatal — never block a proxy request */ }
+  if (!p.cached) {
+    try {
+      const registry = await getModelRegistry();
+      const m = registry.find(r => r.modelString === p.modelName || r.id === p.modelId) as Record<string, unknown> | undefined;
+      if (m) estimatedUsd = modelCost(m, p.inputTokens, p.outputTokens);
+    } catch { /* non-fatal — never block a proxy request */ }
+  }
 
   // Record the request's real cost against the team's budget window (fire-and-
   // forget — budget accounting must never block or fail a proxied request).

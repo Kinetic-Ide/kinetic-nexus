@@ -9,6 +9,17 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
 ## [Unreleased]
 
+### Added
+- **Response caching (Phase 4.5):** optional exact-match response cache. When enabled,
+  an identical request (same model + messages + generation params) is served from
+  Redis, skipping the provider entirely — a real $0 call. The cache key excludes
+  `stream`/`user`, so a hit is replayed in whichever mode the client asked for; every
+  hit emits a $0 usage event attributed to the team (analytics stay honest, budget is
+  not consumed). Tool-call and `n > 1` responses are not cached. Off by default;
+  configurable via `CACHE_ENABLED` / `CACHE_TTL_SECONDS`, the dashboard Settings tab,
+  or `GET/PUT /admin/settings/cache`. Responses carry `X-Nexus-Cache: hit|miss`, and a
+  `nexus_response_cache_total{result}` metric tracks hit/miss/store.
+
 ## [1.1.0] - 2026-07-09
 
 ### Added
