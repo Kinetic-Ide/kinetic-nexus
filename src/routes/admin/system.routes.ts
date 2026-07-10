@@ -17,6 +17,7 @@
 // Dashboard config, health, API-key management, routing status, cache bust.
 import { FastifyInstance }      from 'fastify';
 import { REGISTRY_CACHE_KEY }  from '../../lib/registryCacheKey';
+import { buildBaseUrl }        from '../../lib/baseUrl';
 import { getSetting, setSetting } from '../../services/settings.service';
 import { prisma }              from '../../lib/prisma';
 import { randomUUID } from 'crypto';
@@ -29,9 +30,11 @@ export default async function adminSystemRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/config', adminGuard, async (request, reply) => {
     const apiKey    = await getSetting('NEXUS_API_KEY');
     const providers = await prisma.nexusProvider.count();
-    const proto     = (request.headers['x-forwarded-proto'] as string) ?? 'http';
-    const host      = (request.headers['x-forwarded-host'] as string) ?? request.hostname;
-    const baseUrl   = `${proto}://${host}/v1`;
+    const baseUrl   = buildBaseUrl({
+      host:           request.host, // NOT request.hostname — v5 strips the port
+      forwardedProto: request.headers['x-forwarded-proto'],
+      forwardedHost:  request.headers['x-forwarded-host'],
+    });
     return reply.send({ baseUrl, nexusApiKey: apiKey, isFirstRun: providers === 0 });
   });
 

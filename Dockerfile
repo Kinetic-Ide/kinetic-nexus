@@ -49,5 +49,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+# npm's update notice is noise in a container log and cannot be acted on from inside
+# an immutable image.
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
 # Apply pending migrations, then start the server.
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
