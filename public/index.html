@@ -982,7 +982,6 @@ async function loadModels() {
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
 function renderModelCard(m) {
-  const caps = MODEL_CAPS.filter(c => m[c]);
   const statusColor = STATUS_COLORS[m.status] || 'var(--muted)';
   const cost = (m.inputCostPer1M || m.outputCostPer1M)
     ? `<span style="font-size:11px;color:var(--muted)">$${(m.inputCostPer1M||0).toFixed(2)} / $${(m.outputCostPer1M||0).toFixed(2)} per 1M</span>`
