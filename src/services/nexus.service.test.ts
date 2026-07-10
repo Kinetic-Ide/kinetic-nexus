@@ -17,23 +17,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
-// Two providers on the same tier and four keys: two shared, two owned by team-a.
-// `encryptedKey` is irrelevant here — decrypt is stubbed.
+// By default one premium provider `p1` and four keys on it: two shared, two owned
+// by team-a. Tests that exercise tier fallback push extra providers onto
+// `state.providers`. `encryptedKey` is irrelevant here — decrypt is stubbed.
 
 type Key = { id: string; providerId: string; encryptedKey: string; ownerTeamId: string | null; status: string; rpmLimit: number; tpmLimit: number };
+type Provider = { id: string; tier: string; baseUrl: string; provider: string; authHeader: string; authPrefix: string; preferredModel: string; isActive: boolean; createdAt: Date };
 
-const key =(id: string, ownerTeamId: string | null, status = 'active'): Key =>
-  ({ id, providerId: 'p1', encryptedKey: `enc-${id}`, ownerTeamId, status, rpmLimit: 60, tpmLimit: 100000 });
+const key = (id: string, ownerTeamId: string | null, providerId = 'p1', status = 'active'): Key =>
+  ({ id, providerId, encryptedKey: `enc-${id}`, ownerTeamId, status, rpmLimit: 60, tpmLimit: 100000 });
+
+const provider = (id: string, tier: string): Provider => ({
+  id, tier, baseUrl: 'https://api.example.com/v1', provider: 'openai',
+  authHeader: 'Authorization', authPrefix: 'Bearer', preferredModel: `model-${id}`,
+  isActive: true, createdAt: new Date(),
+});
 
 // `vi.mock` factories are hoisted above the module body, so the shared fixture
 // state has to be hoisted with them.
 const { state, prismaMock } = vi.hoisted(() => {
-  const state: { keys: Key[] } = { keys: [] };
-  const provider = {
-    id: 'p1', baseUrl: 'https://api.example.com/v1', provider: 'openai',
-    authHeader: 'Authorization', authPrefix: 'Bearer', tier: 'premium',
-    preferredModel: 'gpt-x', isActive: true, createdAt: new Date(),
-  };
+  const state: { keys: Record<string, unknown>[]; providers: Record<string, unknown>[] } = { keys: [], providers: [] };
   // findMany honours the `ownerTeamId` equality filter exactly as Postgres would
   // (null matches only null) — that equality *is* the isolation guarantee.
   const prismaMock = {
@@ -41,16 +44,17 @@ const { state, prismaMock } = vi.hoisted(() => {
       findMany: vi.fn(async ({ where }: { where: { providerId: string; ownerTeamId: string | null; status: { in: string[] } } }) =>
         state.keys.filter(k =>
           k.providerId === where.providerId &&
-          where.status.in.includes(k.status) &&
+          where.status.in.includes(k.status as string) &&
           k.ownerTeamId === where.ownerTeamId)),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
         const k = state.keys.find(x => x.id === where.id);
-        return k ? { ...k, provider } : null;
+        if (!k) return null;
+        return { ...k, provider: state.providers.find(p => p.id === k.providerId) };
       }),
       update: vi.fn(async () => ({})),
     },
     nexusProvider: {
-      findMany: vi.fn(async ({ where }: { where: { tier: string } }) => (where.tier === 'premium' ? [provider] : [])),
+      findMany: vi.fn(async ({ where }: { where: { tier: string } }) => state.providers.filter(p => p.tier === where.tier)),
     },
   };
   return { state, prismaMock };
@@ -77,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(admitKey).mockResolvedValue(true);
   vi.mocked(getStickyKeyId).mockResolvedValue(null);
+  state.providers = [provider('p1', 'premium')];
   state.keys = [key('shared-1', null), key('shared-2', null), key('a-1', 'team-a'), key('a-2', 'team-a')];
 });
 
@@ -122,6 +127,60 @@ describe('discoverBestPool — BYOK scoping', () => {
   it('defaults to the shared pool when no scope is passed', async () => {
     const route = await discoverBestPool(10);
     expect(route?.byok).toBe(false);
+  });
+});
+
+describe('discoverBestPool — wasDowngrade', () => {
+  // A downgrade means the deployment could normally have done better for this
+  // request. Being served by a lower tier index is not, on its own, evidence of that.
+  it('is false when the top tier serves the request', async () => {
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.tier).toBe('premium');
+    expect(route?.wasDowngrade).toBe(false);
+  });
+
+  it('is true when a staffed higher tier is exhausted and a lower tier answers', async () => {
+    state.providers = [provider('p1', 'premium'), provider('p2', 'standard')];
+    state.keys = [key('prem-1', null, 'p1'), key('std-1', null, 'p2')];
+    vi.mocked(admitKey).mockImplementation(async (keyId: string) => !keyId.startsWith('prem-'));
+
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.keyId).toBe('std-1');
+    expect(route?.tier).toBe('standard');
+    expect(route?.wasDowngrade).toBe(true);
+  });
+
+  it('is false when no higher tier is configured at all', async () => {
+    // `standard` is this operator's top tier. Nothing was given up, so reporting a
+    // downgrade would send a false alarm on every single request.
+    state.providers = [provider('p2', 'standard')];
+    state.keys = [key('std-1', null, 'p2')];
+
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.tier).toBe('standard');
+    expect(route?.wasDowngrade).toBe(false);
+  });
+
+  it('is true when a higher tier is configured but holds no usable key', async () => {
+    // An active premium pool with no keys is a misconfiguration, and from the
+    // caller's side it is indistinguishable from an exhausted one: premium capacity
+    // was advertised and could not serve. Flagging it is the point of the header.
+    state.providers = [provider('p1', 'premium'), provider('p2', 'standard')];
+    state.keys = [key('std-1', null, 'p2')];
+
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.tier).toBe('standard');
+    expect(route?.wasDowngrade).toBe(true);
+  });
+
+  it('is true across a two-tier gap', async () => {
+    state.providers = [provider('p1', 'premium'), provider('p2', 'standard'), provider('p3', 'fast')];
+    state.keys = [key('prem-1', null, 'p1'), key('std-1', null, 'p2'), key('fast-1', null, 'p3')];
+    vi.mocked(admitKey).mockImplementation(async (keyId: string) => keyId.startsWith('fast-'));
+
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.tier).toBe('fast');
+    expect(route?.wasDowngrade).toBe(true);
   });
 });
 

@@ -172,7 +172,13 @@ async function sweepTiers(
   costWeight: number,
   priceOf: PriceOf,
 ): Promise<NexusRoute | null> {
-  let preferredTierFound = false;
+  // A downgrade means the caller got *less* than the deployment could normally
+  // offer: some higher tier was configured and staffed, but could not serve this
+  // request. An operator who simply never configured a premium provider is not
+  // being downgraded when `standard` answers — that is their top tier. So the flag
+  // tracks "a higher tier had active providers and yielded nothing", not "we are
+  // past index 0".
+  let higherTierWasExhausted = false;
 
   for (const tier of TIER_ORDER) {
     const providers = await prisma.nexusProvider.findMany({
@@ -183,13 +189,13 @@ async function sweepTiers(
     const ordered = costWeight > 0 ? costOrder(providers, priceOf, costWeight) : providers;
 
     for (const provider of ordered) {
-      if (!preferredTierFound) preferredTierFound = true;
       const route = await tryPickKey(provider, reserveTokens, ownerTeamId);
-      if (route) {
-        const wasDowngrade = TIER_ORDER.indexOf(tier) > 0 && preferredTierFound;
-        return { ...route, wasDowngrade, sticky: false };
-      }
+      if (route) return { ...route, wasDowngrade: higherTierWasExhausted, sticky: false };
     }
+
+    // Every provider in this tier was out of headroom, breaker-open, or keyless.
+    // An empty tier is not exhausted — there was nothing to fall back *from*.
+    if (providers.length > 0) higherTierWasExhausted = true;
   }
   return null;
 }
