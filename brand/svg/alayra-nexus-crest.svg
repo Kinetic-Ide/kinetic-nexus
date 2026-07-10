@@ -44,7 +44,7 @@
 </g>
 
 <g fill="#e6c98f">
-<g transform="translate(340 98)"><circle r="3.2"/></g>
+<g transform="rotate(30 340 180)"><g transform="translate(340 98)"><circle r="3.2"/></g></g>
 <g transform="rotate(90 340 180)"><g transform="translate(340 98)"><circle r="3.2"/></g></g>
 <g transform="rotate(150 340 180)"><g transform="translate(340 98)"><circle r="3.2"/></g></g>
 <g transform="rotate(210 340 180)"><g transform="translate(340 98)"><circle r="3.2"/></g></g>
