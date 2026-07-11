@@ -101,10 +101,32 @@
 .tRight { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Line chart ── */
+.chartWrap { position: relative; width: 100%; touch-action: none; }
 .chart { width: 100%; display: block; overflow: visible; }
 /* The area fill comes from an inline per-instance gradient (see LineChart.tsx) that fades to
    transparent at the bottom; a flat `fill` here would override it and bring back the hard edge. */
-.chartLine { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.chartGrid { stroke: var(--border); stroke-width: 1; }
-.chartDot { fill: var(--accent); }
+.chartFill { animation: nxChartRise .7s var(--ease) both; }
+.chartLine {
+  fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+  stroke-dasharray: 1;               /* with pathLength=1, one dash spans the whole line … */
+  animation: nxChartDraw .9s var(--ease) both;  /* … so we can draw it in on first paint */
+}
 .chartEmpty { fill: var(--muted); font-size: 12px; }
+
+@keyframes nxChartDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes nxChartRise { from { opacity: 0; } to { opacity: 1; } }
+
+/* Hover overlay (percent-positioned, HTML so the dot stays circular over the stretched SVG). */
+.chartCrosshair { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-strong); transform: translateX(-0.5px); pointer-events: none; }
+.chartHoverDot {
+  position: absolute; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 3px var(--accent-bg);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.chartTip {
+  position: absolute; transform: translate(-50%, calc(-100% - 12px)); pointer-events: none; z-index: 5;
+  display: flex; flex-direction: column; gap: 1px; white-space: nowrap;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 5px 9px; box-shadow: var(--shadow); font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums;
+}
+.chartTip b { color: var(--muted); font-weight: 600; font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; }

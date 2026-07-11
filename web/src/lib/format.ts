@@ -22,6 +22,13 @@ export function currency(usd: number): string {
   return '$' + usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** "2026-07-09" → "Jul 9" (UTC, so it matches the server's day buckets). */
+export function shortDate(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /** Coarse "time ago" for activity rows; falls back to the date once past a week. */
 export function relativeTime(iso: string, now: number = Date.now()): string {
   const t = new Date(iso).getTime();

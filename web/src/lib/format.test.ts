@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compactNumber, currency, relativeTime } from './format';
+import { compactNumber, currency, relativeTime, shortDate } from './format';
 
 describe('compactNumber', () => {
   it('shows small numbers as-is and abbreviates large ones', () => {
@@ -16,6 +16,13 @@ describe('currency', () => {
     expect(currency(0)).toBe('$0');
     expect(currency(0.004)).toBe('<$0.01');
     expect(currency(12.5)).toBe('$12.50');
+  });
+});
+
+describe('shortDate', () => {
+  it('formats an ISO day as "Mon D" in UTC', () => {
+    expect(shortDate('2026-07-09')).toBe('Jul 9');
+    expect(shortDate('2026-12-25')).toBe('Dec 25');
   });
 });
 

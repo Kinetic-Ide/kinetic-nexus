@@ -8,14 +8,16 @@ interface Props {
   title:     string;
   big:       ComponentChildren;
   data:      number[];
+  labels?:   string[];
+  format?:   (v: number) => string;
   ariaLabel: string;
 }
 
-export function ChartCard({ title, big, data, ariaLabel }: Props) {
+export function ChartCard({ title, big, data, labels, format, ariaLabel }: Props) {
   return (
     <Card heading={title} class={s.chartCard}>
       <div class={s.chartHead}><span class={s.chartBig}>{big}</span></div>
-      <LineChart data={data} height={120} ariaLabel={ariaLabel} />
+      <LineChart data={data} labels={labels} format={format} height={120} ariaLabel={ariaLabel} />
     </Card>
   );
 }

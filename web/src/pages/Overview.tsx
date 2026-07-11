@@ -1,7 +1,7 @@
 import { Activity, ArrowDownUp, KeyRound, Cpu, Users, DollarSign } from 'lucide-preact';
 import { PageHeader, StatCard, Badge, Spinner, Button } from '../ui';
 import { useApi } from '../hooks/useApi';
-import { compactNumber, currency } from '../lib/format';
+import { compactNumber, currency, shortDate } from '../lib/format';
 import type { Overview as OverviewData } from '../api';
 import { ChartCard } from './overview/ChartCard';
 import { TopModels } from './overview/TopModels';
@@ -39,6 +39,7 @@ export function Overview() {
 
   const { stats, series7d, topModels, topKeys, recentLogs } = data;
   const sum = (pick: (d: OverviewData['series7d'][number]) => number) => series7d.reduce((a, d) => a + pick(d), 0);
+  const dates = series7d.map((d) => shortDate(d.date));
 
   return (
     <>
@@ -60,10 +61,10 @@ export function Overview() {
       </div>
 
       <div class={`${s.grid} ${s.cols2} ${s.section}`}>
-        <ChartCard title="Input tokens · last 7 days"  big={compactNumber(sum((d) => d.inputTokens))}  data={series7d.map((d) => d.inputTokens)}  ariaLabel="Input tokens over the last 7 days" />
-        <ChartCard title="Output tokens · last 7 days" big={compactNumber(sum((d) => d.outputTokens))} data={series7d.map((d) => d.outputTokens)} ariaLabel="Output tokens over the last 7 days" />
-        <ChartCard title="Requests · last 7 days"      big={compactNumber(sum((d) => d.requests))}     data={series7d.map((d) => d.requests)}     ariaLabel="Requests over the last 7 days" />
-        <ChartCard title="Cost · last 7 days"          big={currency(sum((d) => d.usd))}               data={series7d.map((d) => d.usd)}          ariaLabel="Cost over the last 7 days" />
+        <ChartCard title="Input tokens · last 7 days"  big={compactNumber(sum((d) => d.inputTokens))}  data={series7d.map((d) => d.inputTokens)}  labels={dates} format={compactNumber} ariaLabel="Input tokens over the last 7 days" />
+        <ChartCard title="Output tokens · last 7 days" big={compactNumber(sum((d) => d.outputTokens))} data={series7d.map((d) => d.outputTokens)} labels={dates} format={compactNumber} ariaLabel="Output tokens over the last 7 days" />
+        <ChartCard title="Requests · last 7 days"      big={compactNumber(sum((d) => d.requests))}     data={series7d.map((d) => d.requests)}     labels={dates} format={compactNumber} ariaLabel="Requests over the last 7 days" />
+        <ChartCard title="Cost · last 7 days"          big={currency(sum((d) => d.usd))}               data={series7d.map((d) => d.usd)}          labels={dates} format={currency}       ariaLabel="Cost over the last 7 days" />
       </div>
 
       <div class={`${s.grid} ${s.cols2} ${s.section}`}>
