@@ -530,6 +530,7 @@ POST /v1/chat/completions   OpenAI Chat Completions (streaming + non-streaming)
 POST /v1/messages           Anthropic Messages (streaming + non-streaming)
 POST /v1/embeddings         OpenAI Embeddings — for RAG / vector search
 POST /v1/completions        OpenAI legacy completions — fill-in-the-middle / autocomplete
+POST /v1/images/generations OpenAI Images — billed per image, not per token
 GET  /v1/models             Model discovery (OpenAI + Anthropic shape)
 ```
 

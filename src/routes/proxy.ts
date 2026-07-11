@@ -20,7 +20,7 @@ import { handleProxy }    from '../services/completionsProxy.service';
 import type { CompletionsBody } from '../services/completionsProxy.service';
 import { anthropicToOpenAI } from '../lib/anthropic';
 import { createAnthropicReply } from '../lib/anthropicReply';
-import { dispatchProxy, embeddingReserve, completionReserve } from '../services/proxyDispatch.service';
+import { dispatchProxy, embeddingReserve, completionReserve, imageReserve, imageQuantity } from '../services/proxyDispatch.service';
 
 export default async function proxyRoutes(fastify: FastifyInstance) {
   fastify.post('/v1/chat/completions', { preHandler: [verifyApiKey] }, async (request, reply) => {
@@ -54,6 +54,23 @@ export default async function proxyRoutes(fastify: FastifyInstance) {
     const body = request.body as Record<string, unknown>;
     return dispatchProxy(body, reply, {
       capability: 'completion', upstreamPath: '/completions', reserveTokens: completionReserve(body),
+      team: request.team, teamKeyId: request.teamKeyId,
+    });
+  });
+
+  // Image generation (Phase 6.3b) — served by a model that declares the `image`
+  // capability. JSON in, JSON out, but billed per generated image rather than per token:
+  // the dispatcher records the returned `data[]` count against the model's per-image
+  // price. Same routing, breaker, budget and BYOK path as every other endpoint.
+  fastify.post('/v1/images/generations', { preHandler: [verifyApiKey] }, async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    return dispatchProxy(body, reply, {
+      capability: 'image', upstreamPath: '/images/generations', reserveTokens: imageReserve(body),
+      billing: {
+        unit: 'image',
+        quantityFromResponse: imageQuantity,
+        quantityFromRequest: (b) => (typeof b.n === 'number' ? b.n : 1),
+      },
       team: request.team, teamKeyId: request.teamKeyId,
     });
   });

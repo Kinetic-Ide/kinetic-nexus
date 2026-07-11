@@ -37,7 +37,7 @@ vi.mock('./ssrf.service',   () => ({ getSsrfPolicy: vi.fn(async () => ({})) }));
 vi.mock('./byok.service',   () => ({ resolveRequestScope: vi.fn(async () => ({ ownerTeamId: null, fallbackToShared: true, namespace: 'shared' })) }));
 vi.mock('./budget.service', () => ({ checkTeamBudget: vi.fn(async () => ({ allowed: true })) }));
 
-import { dispatchProxy, embeddingReserve, completionReserve, extractTokenUsage } from './proxyDispatch.service';
+import { dispatchProxy, embeddingReserve, completionReserve, extractTokenUsage, imageReserve, imageQuantity } from './proxyDispatch.service';
 import * as nexus from './nexus.service';
 import { recordTokenUsage } from './token.service';
 
@@ -80,6 +80,38 @@ describe('pure helpers', () => {
     expect(extractTokenUsage({ usage: { prompt_tokens: 5 } })).toEqual({ input: 5, output: 0 });
     expect(extractTokenUsage({ usage: { prompt_tokens: 5, completion_tokens: 9 } })).toEqual({ input: 5, output: 9 });
     expect(extractTokenUsage({})).toEqual({ input: 0, output: 0 });
+  });
+  it('imageReserve claims a nominal slot from the prompt', () => {
+    expect(imageReserve({ prompt: 'a cat' })).toBeGreaterThan(0);
+    expect(imageReserve({})).toBe(1);
+  });
+  it('imageQuantity counts returned images, or undefined when absent', () => {
+    expect(imageQuantity({ data: [{ url: 'a' }, { url: 'b' }] })).toBe(2);
+    expect(imageQuantity({})).toBeUndefined();
+  });
+});
+
+describe('dispatchProxy — per-image billing (Phase 6.3b)', () => {
+  const imageOpts = {
+    capability: 'image' as const, upstreamPath: '/images/generations', reserveTokens: 5,
+    billing: { unit: 'image', quantityFromResponse: imageQuantity, quantityFromRequest: (b: Record<string, unknown>) => (typeof b.n === 'number' ? b.n : 1) },
+  };
+
+  it('bills the returned image count as unit "image", not tokens', async () => {
+    h.fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ created: 1, data: [{ url: 'a' }, { url: 'b' }, { url: 'c' }] }) });
+    const { reply, state } = fakeReply();
+    await dispatchProxy({ prompt: 'a fox', n: 3 }, reply, imageOpts);
+
+    expect(state.status).toBe(200);
+    expect(recordTokenUsage).toHaveBeenCalledWith(expect.objectContaining({ unit: 'image', quantity: 3, inputTokens: 0, outputTokens: 0 }));
+  });
+
+  it('falls back to the requested n when the response omits data[]', async () => {
+    h.fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ created: 1 }) });
+    const { reply } = fakeReply();
+    await dispatchProxy({ prompt: 'a fox', n: 2 }, reply, imageOpts);
+
+    expect(recordTokenUsage).toHaveBeenCalledWith(expect.objectContaining({ unit: 'image', quantity: 2 }));
   });
 });
 

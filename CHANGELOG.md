@@ -10,6 +10,13 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 ## [Unreleased]
 
 ### Added
+- **Image generation — `POST /v1/images/generations` (Phase 6.3b).** Text-to-image
+  requests route to a model that declares the `image` capability, through the same
+  routing, failover, circuit breaker, budgets, and analytics as every other endpoint.
+  Introduces **per-modality billing**: images are metered per generated image against a
+  model's `imagePrice`, not per token, so image cost is accounted honestly without
+  polluting token totals. Token usage now carries a `unit` and `quantity` (additive,
+  zero-downtime migration) — the foundation the audio endpoints build on next.
 - **Embeddings and legacy completions — `POST /v1/embeddings`, `POST /v1/completions`
   (Phase 6.3).** `/v1/embeddings` unlocks RAG stacks (LangChain, LlamaIndex, vector
   search); `/v1/completions` is the fill-in-the-middle / autocomplete endpoint. Both run

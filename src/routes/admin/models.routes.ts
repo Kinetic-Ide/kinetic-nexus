@@ -37,6 +37,7 @@ const modelSchema = z.object({
   hasToolCalling:  z.boolean().default(false),
   inputCostPer1M:  z.number().min(0).default(0),
   outputCostPer1M: z.number().min(0).default(0),
+  imagePrice:      z.number().min(0).default(0),
   contextWindow:   z.number().int().min(0).default(0),
   maxTokens:       z.number().int().min(0).default(0),
 }).passthrough();

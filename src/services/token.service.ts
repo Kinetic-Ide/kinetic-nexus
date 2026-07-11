@@ -45,6 +45,14 @@ function modelCost(m: Record<string, unknown>, input: number, output: number): n
   return (input / 1000) * iPer1k + (output / 1000) * oPer1k;
 }
 
+// Per-modality cost (Phase 6.3b). A non-token unit is priced as quantity × the model's
+// per-unit price. Today only "image" exists (USD per image); speech/transcription add
+// their own price fields in 6.3c. An unknown or unpriced unit costs 0, never throws.
+function unitCost(m: Record<string, unknown>, unit: string, quantity: number): number {
+  const price = unit === 'image' ? (m.imagePrice as number | undefined) ?? 0 : 0;
+  return Math.max(0, quantity) * price;
+}
+
 export interface RecordTokenUsageParams {
   sessionId:       string;
   modelId:         string;
@@ -52,6 +60,11 @@ export interface RecordTokenUsageParams {
   provider:        string;
   inputTokens:     number;
   outputTokens:    number;
+  // Per-modality billing (Phase 6.3b). Omitted for token endpoints (defaults to
+  // unit "token", quantity 0). An image request sets unit "image" and a quantity;
+  // cost is then quantity × the model's per-unit price, not a token calculation.
+  unit?:           string;
+  quantity?:       number;
   nexusTeamKeyId?: string;
   // Team budget attribution: when set, this request's cost is added to the team's
   // current budget window as soon as it is known.
@@ -63,12 +76,16 @@ export interface RecordTokenUsageParams {
 }
 
 export async function recordTokenUsage(p: RecordTokenUsageParams): Promise<void> {
+  const unit     = p.unit ?? 'token';
+  const quantity = p.quantity ?? 0;
   let estimatedUsd = 0;
   if (!p.cached) {
     try {
       const registry = await getModelRegistry();
       const m = registry.find(r => r.modelString === p.modelName || r.id === p.modelId) as Record<string, unknown> | undefined;
-      if (m) estimatedUsd = modelCost(m, p.inputTokens, p.outputTokens);
+      if (m) estimatedUsd = unit === 'token'
+        ? modelCost(m, p.inputTokens, p.outputTokens)
+        : unitCost(m, unit, quantity);
     } catch { /* non-fatal — never block a proxy request */ }
   }
 
@@ -91,6 +108,8 @@ export async function recordTokenUsage(p: RecordTokenUsageParams): Promise<void>
     inputTokens:    p.inputTokens,
     outputTokens:   p.outputTokens,
     totalTokens:    p.inputTokens + p.outputTokens,
+    unit,
+    quantity,
     estimatedUsd,
     nexusTeamKeyId: p.nexusTeamKeyId ?? null,
     createdAt:      new Date(),

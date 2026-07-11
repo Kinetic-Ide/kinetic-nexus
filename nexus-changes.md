@@ -11,6 +11,50 @@
 
 ---
 
+**Date:** 2026-07-11 · Session 30  
+**Author:** Abbas  
+**Title:** Phase 6.3b — Image Generation and Per-Modality Billing  
+
+**Summary:**  
+The previous phase deliberately left one thing unfinished. Embeddings and completions
+are measured in tokens, and the gateway has always counted tokens, so they cost nothing
+extra to account for. Images are different. An image is not billed by the words in its
+prompt; it is billed per picture produced. The remaining non-conversational endpoints
+all share this property in their own way, and none of them can be accounted honestly by
+a token count alone. Before adding any of them, the gateway needed a way to record what
+was actually bought.
+
+This phase gives it one. Every usage record now carries the unit it was measured in and
+a quantity in that unit, alongside the token figures it always had. A chat request still
+reads as tokens, exactly as before; an image request reads as a count of images. The two
+never mix, so the token totals that drive the charts and the usage leaderboard stay
+clean while image spend is tracked truthfully beside them. The change to the database is
+additive and carries its own defaults, so every existing record and every request in
+flight continues to read correctly with nothing to migrate by hand.
+
+On that foundation the phase adds a single endpoint: image generation. It routes to a
+model the operator has marked as image-capable, priced per image, and it travels the
+same path as every other request — the same choice of model and key, the same circuit
+breaker, the same team budgets, the same failover and analytics. Nothing about the
+routing is new; only the meter is. A request with no image-capable model configured is
+refused plainly, naming what is missing and pointing at the Models tab, in the same
+manner as the endpoints before it.
+
+Audio was again held back, and for a concrete reason rather than caution. Synthesized
+speech is returned not as a document but as a stream of sound, and a transcription is
+submitted not as text but as an uploaded recording — a different manner of carrying the
+request and the reply than anything the gateway does today, and one that also needs a
+way to measure the length of audio in order to price it. That is its own body of work,
+and it is the whole of the next phase, which now rests on the per-unit accounting this
+one put in place. Keeping images separate held this phase to a small, reviewable change
+fully covered by tests: the image count is read from the provider's reply, falls back to
+the number requested when the reply omits it, and is recorded as a unit of images rather
+than as tokens, all verified through the same stubbed routing the other endpoints use.
+
+**Green gate:** lint 0 · typecheck 0 · 302 tests pass (+4) · build 0 · npm audit 0 vulnerabilities.
+
+---
+
 **Date:** 2026-07-11 · Session 29  
 **Author:** Abbas  
 **Title:** Phase 6.3 — Embeddings and Legacy Completions  

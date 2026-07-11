@@ -44,6 +44,10 @@ export interface AiModel {
   hasToolCalling:  boolean;
   inputCostPer1M:  number;
   outputCostPer1M: number;
+  // Per-modality price (Phase 6.3b). Image models bill per generated image, not per
+  // token, so token pricing cannot express their cost. USD per image; 0 = unpriced.
+  // Speech/transcription add their own price fields when those endpoints land (6.3c).
+  imagePrice:      number;
   contextWindow:   number;
   maxTokens:       number;
 }
@@ -90,6 +94,7 @@ export function normalizeModel(raw: Record<string, unknown>): AiModel {
     hasToolCalling:  raw.hasToolCalling === true || raw.supportsToolCalling === true,
     inputCostPer1M:  num(raw.inputCostPer1M ?? (num(raw.inputPricePer1k) * 1000)),
     outputCostPer1M: num(raw.outputCostPer1M ?? (num(raw.outputPricePer1k) * 1000)),
+    imagePrice:      num(raw.imagePrice),
     contextWindow:   num(raw.contextWindow),
     maxTokens:       num(raw.maxTokens),
   };

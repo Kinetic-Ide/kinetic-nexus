@@ -33,7 +33,7 @@ for the layering rule and the request path.
 | File | Responsibility |
 |---|---|
 | `completionsProxy.service.ts` | **The chat request path.** Budget → guardrails → scope → cache → route → upstream → outcome → usage |
-| `proxyDispatch.service.ts` | Generic non-chat transport (embeddings, completions) over the same routing + resilience primitives |
+| `proxyDispatch.service.ts` | Generic non-chat transport (embeddings, completions, image generation) over the same routing + resilience primitives; `billing` describes per-modality (non-token) metering |
 | `nexus.service.ts` | Key selection: `discoverBestPool`, tier sweeps, sticky resolution, breaker outcome reporters, provider probes |
 | `byok.service.ts` | Resolves a request's routing scope from its team |
 | `adminAuth.service.ts` | Sessions, login lockout, TOTP enrolment, recovery codes, admin API tokens |

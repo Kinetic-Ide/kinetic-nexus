@@ -26,7 +26,7 @@ let seq = 0;
 const evt = (over: Partial<UsageEvent> = {}): UsageEvent => ({
   id:             `id-${seq++}`,
   sessionId:      's', modelId: 'm', modelName: 'm', provider: 'p',
-  inputTokens:    10, outputTokens: 5, totalTokens: 15, estimatedUsd: 0.001,
+  inputTokens:    10, outputTokens: 5, totalTokens: 15, unit: 'token', quantity: 0, estimatedUsd: 0.001,
   nexusTeamKeyId: null, createdAt: new Date(),
   ...over,
 });

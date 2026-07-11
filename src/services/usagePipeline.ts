@@ -36,6 +36,10 @@ export interface UsageEvent {
   inputTokens:    number;
   outputTokens:   number;
   totalTokens:    number;
+  // Per-modality billing (Phase 6.3b). Defaulted for token endpoints; an image request
+  // records unit "image" and a quantity, so the batched insert stays a single shape.
+  unit:           string;
+  quantity:       number;
   estimatedUsd:   number;
   nexusTeamKeyId: string | null;
   createdAt:      Date;

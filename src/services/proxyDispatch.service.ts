@@ -43,10 +43,22 @@ const UPSTREAM_TTFT_MS = parseInt(process.env.UPSTREAM_TTFT_MS ?? '20000', 10);
 const UPSTREAM_BODY_MS = parseInt(process.env.UPSTREAM_BODY_MS ?? '60000', 10);
 const DEFAULT_MAX_TOKENS_RESERVE = parseInt(process.env.NEXUS_DEFAULT_MAX_TOKENS ?? '2048', 10);
 
+/**
+ * Non-token billing (Phase 6.3b). Endpoints whose cost is not a token count — image
+ * generation bills per image — describe how to count their unit here. Absent = the
+ * default token path (embeddings, completions): usage is read from `response.usage`.
+ */
+export interface BillingSpec {
+  unit: string;                                       // "image" (later: "character", "second")
+  quantityFromResponse?: (data: Record<string, unknown>) => number | undefined;
+  quantityFromRequest?:  (body: Record<string, unknown>) => number;
+}
+
 export interface DispatchOptions {
   capability:   Capability;   // which model capability serves this endpoint
-  upstreamPath: string;       // '/embeddings' | '/completions'
+  upstreamPath: string;       // '/embeddings' | '/completions' | '/images/generations'
   reserveTokens: number;      // TPM admission reserve
+  billing?:     BillingSpec;  // set for non-token modalities; omit for token endpoints
   team?:        TeamContext;
   teamKeyId?:   string;
 }
@@ -73,6 +85,20 @@ export function completionReserve(body: Record<string, unknown>): number {
 }
 
 /**
+ * Nominal admission reserve for an /images/generations request. Images are billed per
+ * image, not per token, so this only claims a small TPM slot to keep the per-key rate
+ * limiter honest; the full reserve is refunded on success (no tokens are consumed).
+ */
+export function imageReserve(body: Record<string, unknown>): number {
+  return Math.max(1, countTokens(String(body.prompt ?? '')));
+}
+
+/** Images returned by an /images/generations response (`data[]`), for per-image billing. */
+export function imageQuantity(data: Record<string, unknown>): number | undefined {
+  return Array.isArray(data.data) ? data.data.length : undefined;
+}
+
+/**
  * Forward a non-chat request through the shared routing + resilience path. `body` is a
  * plain JSON object; the model is replaced with the one routing selected, and the call
  * goes to `opts.upstreamPath` on the chosen provider. Streaming is not offered here —
@@ -86,7 +112,7 @@ export async function dispatchProxy(
   const t0 = Date.now();
   let tier: string | undefined = undefined; // set once a route is chosen (read in the closure before then)
   const observe = (o: metrics.RequestOutcome) => metrics.observeRequest(o, tier, (Date.now() - t0) / 1000);
-  const { team, teamKeyId, capability, upstreamPath, reserveTokens } = opts;
+  const { team, teamKeyId, capability, upstreamPath, reserveTokens, billing } = opts;
 
   // Team budget gate — before any provider work.
   if (team && team.budgetUsd != null) {
@@ -173,15 +199,24 @@ export async function dispatchProxy(
 
   // Clean success: close the breaker (no sticky — these are not conversational).
   void reportSuccess(keyId, route.isProbe).catch(() => {});
-  const { input, output } = extractTokenUsage(data);
   observe('success');
-  metrics.addTokens(input, output);
-  void reconcileTpm(keyId, reserveTokens, input + output).catch(() => {});
-  void recordTokenUsage({
+
+  const usage = {
     sessionId: `${capability}-${Date.now()}`, modelId: route.modelId ?? route.modelString, modelName: route.modelString,
-    provider: route.providerSlug, inputTokens: input, outputTokens: output,
-    nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod,
-  }).catch(() => {});
+    provider: route.providerSlug, nexusTeamKeyId: teamKeyId, teamId: team?.id, teamBudgetPeriod: team?.budgetPeriod,
+  };
+  if (billing) {
+    // Non-token modality (image): bill per unit, not per token. No admission tokens are
+    // consumed, so the reserve is refunded in full; token metrics are left untouched.
+    const quantity = billing.quantityFromResponse?.(data) ?? billing.quantityFromRequest?.(body) ?? 0;
+    void reconcileTpm(keyId, reserveTokens, 0).catch(() => {});
+    void recordTokenUsage({ ...usage, inputTokens: 0, outputTokens: 0, unit: billing.unit, quantity }).catch(() => {});
+  } else {
+    const { input, output } = extractTokenUsage(data);
+    metrics.addTokens(input, output);
+    void reconcileTpm(keyId, reserveTokens, input + output).catch(() => {});
+    void recordTokenUsage({ ...usage, inputTokens: input, outputTokens: output }).catch(() => {});
+  }
 
   reply.header('X-Nexus-Model', route.modelString);
   reply.header('X-Nexus-Provider', route.providerSlug);
