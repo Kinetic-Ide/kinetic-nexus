@@ -32,10 +32,13 @@ vi.mock('../lib/redis', () => ({ redis: {} }));
 vi.mock('./notifications.service', () => ({ notificationsArmed: vi.fn(async () => false), notify: vi.fn(async () => {}) }));
 vi.mock('./model.service',        () => ({ getModelRegistry: vi.fn(async () => []) }));
 vi.mock('./usagePipeline',        () => ({ emit: vi.fn() }));
+vi.mock('./budget.service',       () => ({ addSpend: vi.fn(async () => null), periodKey: vi.fn(() => 'w') }));
+vi.mock('./audit.service',        () => ({ isUsageAnonymized: vi.fn(async () => false) }));
 
 import {
-  getUsageSummary, getUsageByTeamKey, getTimeSeriesByTeam, getTimeSeriesByModel,
+  getUsageSummary, getUsageByTeamKey, getTimeSeriesByTeam, getTimeSeriesByModel, recordTokenUsage,
 } from './token.service';
+import { emit } from './usagePipeline';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
@@ -88,15 +91,27 @@ describe('getUsageByTeamKey — grouped, names resolved in one lookup', () => {
 });
 
 describe('time series — built from a date_trunc query', () => {
-  it('shapes the per-team series (teamId preserves the team-key id)', async () => {
+  it('shapes the per-team series (teamKeyId is the real field; teamId is a legacy alias)', async () => {
     prismaMock.$queryRaw.mockResolvedValue([{ day: new Date('2026-07-09T00:00:00Z'), teamKeyId: 'k1', teamName: 'Alpha', requests: 4, tokens: 12 }]);
     const out = await getTimeSeriesByTeam('7d');
-    expect(out).toEqual([{ date: '2026-07-09', teamId: 'k1', teamName: 'Alpha', requests: 4, tokens: 12 }]);
+    expect(out).toEqual([{ date: '2026-07-09', teamKeyId: 'k1', teamId: 'k1', teamName: 'Alpha', requests: 4, tokens: 12 }]);
   });
 
   it('shapes the per-model series', async () => {
     prismaMock.$queryRaw.mockResolvedValue([{ day: new Date('2026-07-09T00:00:00Z'), model: 'gpt', tokens: 9 }]);
     const out = await getTimeSeriesByModel('7d');
     expect(out).toEqual([{ date: '2026-07-09', model: 'gpt', tokens: 9 }]);
+  });
+});
+
+describe('recordTokenUsage — cost estimation', () => {
+  it('records $0 when the model is not in the registry (explicit fallback)', async () => {
+    // getModelRegistry is mocked to return [], so no model ever matches.
+    await recordTokenUsage({
+      sessionId: 's1', modelId: 'unknown-id', modelName: 'unknown-model', provider: 'openai',
+      inputTokens: 100, outputTokens: 50,
+    });
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(emit).mock.calls[0][0]).toMatchObject({ estimatedUsd: 0, modelName: 'unknown-model' });
   });
 });

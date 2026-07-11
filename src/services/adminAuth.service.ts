@@ -132,8 +132,11 @@ const RECOVERY_CODE_COUNT = 10;
 
 /** Ten fresh codes. Any previously-issued code stops working. Returned once. */
 export async function regenerateRecoveryCodes(): Promise<string[]> {
-  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, () =>
-    randomBytes(5).toString('hex').match(/.{1,5}/g)!.join('-'));
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, () => {
+    // 5 bytes → a fixed 10-char hex string; split at the midpoint into xxxxx-xxxxx.
+    const hex = randomBytes(5).toString('hex');
+    return `${hex.slice(0, 5)}-${hex.slice(5)}`;
+  });
   await prisma.adminRecoveryCode.deleteMany({});
   await prisma.adminRecoveryCode.createMany({
     data: codes.map((c) => ({ codeHash: sha256(c) })),
@@ -321,10 +324,16 @@ export async function login(password: string, code: string | undefined, source: 
 const TOKEN_PREFIX = 'nxa_';
 
 export async function createAdminApiToken(name: string, role: AdminRole = 'owner'): Promise<{ id: string; name: string; token: string; maskedKey: string; role: AdminRole }> {
+  // The route validates with Zod, but this is an exported service function: enforce the same
+  // bound here so a direct caller can never persist a blank or oversized name.
+  const normalizedName = name.trim();
+  if (normalizedName.length < 1 || normalizedName.length > 80) {
+    throw new Error('Token name must be between 1 and 80 characters.');
+  }
   const token = TOKEN_PREFIX + randomBytes(24).toString('hex');
   const maskedKey = `${token.slice(0, 8)}••••${token.slice(-4)}`;
   const row = await prisma.adminApiToken.create({
-    data: { name, tokenHash: sha256(token), maskedKey, role },
+    data: { name: normalizedName, tokenHash: sha256(token), maskedKey, role },
   });
   return { id: row.id, name: row.name, token, maskedKey, role: asRole(row.role) };
 }

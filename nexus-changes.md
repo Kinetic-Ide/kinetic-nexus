@@ -11,6 +11,40 @@
 
 ---
 
+**Date:** 2026-07-11 · Session 40  
+**Author:** Abbas  
+**Title:** Quality pass — review findings, dashboard build fix, and chart polish  
+
+**Summary:**  
+A short, focused clean-up session on top of the new dashboard foundation. Our automated code
+reviewer flagged a handful of small robustness points across the gateway, and this session
+resolves every one of them. The way one-time recovery codes are generated was rewritten to be
+plainer and to remove a fragile assumption that could, in theory, have failed if the format ever
+changed. The naming of an administrator access token is now checked and tidied inside the core
+routine itself — not only at the edge — so an empty or over-long name can never be stored, no
+matter how the routine is called. The cost calculator now states explicitly that a request using
+a model it does not recognise is counted as zero spend, and that behaviour is now locked in place
+by a dedicated test so it can never drift unnoticed. And one analytics field that carried a
+slightly misleading name is now labelled honestly, with the old name kept alongside it so nothing
+that already relies on it breaks.
+
+Two issues on the new dashboard were also fixed. First, an error that stopped the dashboard's own
+type-check from passing — an unused piece of configuration referencing a tool that wasn't needed —
+was removed, so the interface once again builds cleanly. Second, a piece of visual polish: on the
+overview charts, a faint horizontal line was showing along the bottom of the shaded area under
+each trend line, and only in dark mode. The shaded fill now fades gently into the background
+instead of ending in a hard edge, so the charts read as clean, modern sparklines in both themes.
+As a side-effect of the new dashboard being a separate package, the main project's style check was
+briefly picking up the dashboard's compiled output; it is now told to leave the dashboard folder
+alone, since the dashboard already checks itself on every push.
+
+Everything passes cleanly on both parts of the project — code style, type safety, the full test
+suites, the production builds, and a zero-vulnerability dependency check. With the foundation now
+tidy, the redesign continues with the main overview screen, wiring its live figures and charts to
+real gateway data.
+
+---
+
 **Date:** 2026-07-11 · Session 39  
 **Author:** Abbas  
 **Title:** Phase 7.1 — Dashboard Redesign Foundation  

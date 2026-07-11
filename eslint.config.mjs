@@ -6,8 +6,10 @@ import globals from 'globals';
 export default tseslint.config(
   {
     // Never lint build output, deps, the generated client, or the brand kit
-    // (SVG/PNG assets plus a standalone CommonJS render script).
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'prisma/migrations/**', 'brand/**'],
+    // (SVG/PNG assets plus a standalone CommonJS render script). The dashboard app
+    // under web/ is a separate package with its own ESLint config and CI job, so it is
+    // ignored here wholesale (otherwise its built bundle in web/dist gets linted).
+    ignores: ['dist/**', 'web/**', 'node_modules/**', 'coverage/**', 'prisma/migrations/**', 'brand/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

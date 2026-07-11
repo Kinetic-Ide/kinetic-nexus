@@ -89,7 +89,8 @@
 
 /* ── Line chart ── */
 .chart { width: 100%; display: block; overflow: visible; }
-.chartArea { fill: var(--accent); opacity: .12; }
+/* The area fill comes from an inline per-instance gradient (see LineChart.tsx) that fades to
+   transparent at the bottom; a flat `fill` here would override it and bring back the hard edge. */
 .chartLine { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chartGrid { stroke: var(--border); stroke-width: 1; }
 .chartDot { fill: var(--accent); }

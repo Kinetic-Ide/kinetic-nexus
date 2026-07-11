@@ -94,10 +94,17 @@ export async function recordTokenUsage(p: RecordTokenUsageParams): Promise<void>
   if (!p.cached) {
     try {
       const registry = await getModelRegistry();
-      const m = registry.find(r => r.modelString === p.modelName || r.id === p.modelId) as Record<string, unknown> | undefined;
-      if (m) estimatedUsd = unit === 'token'
-        ? modelCost(m, p.inputTokens, p.outputTokens)
-        : unitCost(m, unit, quantity);
+      const matchesModel = (r: { modelString?: string; id?: string }): boolean =>
+        r.modelString === p.modelName || r.id === p.modelId;
+      const m = registry.find(matchesModel) as Record<string, unknown> | undefined;
+      if (!m) {
+        // Explicit fallback: a model not in the registry is treated as zero estimated spend.
+        estimatedUsd = 0;
+      } else {
+        estimatedUsd = unit === 'token'
+          ? modelCost(m, p.inputTokens, p.outputTokens)
+          : unitCost(m, unit, quantity);
+      }
     } catch { /* non-fatal — never block a proxy request */ }
   }
 
@@ -282,11 +289,13 @@ export async function getTimeSeriesByTeam(period: Period = '30d', customSince?: 
     ORDER BY day ASC`;
 
   return rows.map((r) => ({
-    date:     new Date(r.day).toISOString().slice(0, 10),
-    teamId:   r.teamKeyId,
-    teamName: r.teamName,
-    requests: r.requests ?? 0,
-    tokens:   r.tokens   ?? 0,
+    date:      new Date(r.day).toISOString().slice(0, 10),
+    teamKeyId: r.teamKeyId,
+    teamName:  r.teamName,
+    // Legacy alias kept for backward compatibility; holds a team-key id, not a team id.
+    teamId:    r.teamKeyId,
+    requests:  r.requests ?? 0,
+    tokens:    r.tokens   ?? 0,
   }));
 }
 

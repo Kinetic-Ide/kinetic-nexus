@@ -1,6 +1,5 @@
 import { defineConfig } from 'vitest/config';
 import preact from '@preact/preset-vite';
-import { fileURLToPath } from 'node:url';
 
 // The dashboard builds to static assets the gateway serves as-is (no SSR), so the single
 // self-hostable container is unchanged. `base: './'` keeps asset URLs relative, so it works
@@ -8,9 +7,6 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   base: './',
   plugins: [preact()],
-  resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
-  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
