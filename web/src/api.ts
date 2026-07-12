@@ -78,9 +78,19 @@ export interface AiModel {
   priority: number; capabilities: string[]; hasVision: boolean; hasFIM: boolean; hasToolCalling: boolean;
   inputCostPer1M: number; outputCostPer1M: number;
   imagePrice: number; speechPricePer1MChars: number; transcriptionPrice: number;
+  audioInputPer1M: number; audioOutputPer1M: number;
   contextWindow: number; maxTokens: number;
 }
 export interface ModelsResponse { models: AiModel[]; capabilities: string[]; }
+
+// Mirrors GET /admin/models/pricing-catalog (pricingCatalog.service.ts) — indicative auto-fill data.
+export interface PricingCatalogEntry {
+  match: string; provider: string; displayName: string; capabilities: string[];
+  inputCostPer1M?: number; outputCostPer1M?: number; imagePrice?: number;
+  speechPricePer1MChars?: number; transcriptionPrice?: number;
+  audioInputPer1M?: number; audioOutputPer1M?: number;
+  contextWindow?: number; maxTokens?: number; hasVision?: boolean; hasToolCalling?: boolean;
+}
 
 // Mirrors GET /admin/config (system.routes.ts).
 export interface GatewayConfig { baseUrl: string; nexusApiKey: string | null; isFirstRun: boolean; }

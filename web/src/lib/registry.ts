@@ -44,3 +44,9 @@ export async function removeModelFromRegistry(id: string): Promise<void> {
   const { models } = await GET<{ models: AiModel[] }>('/admin/models');
   await PUT('/admin/models', { models: models.filter((m) => m.id !== id) });
 }
+
+/** Replace one model (matched by id) with an edited copy, writing the registry back. */
+export async function updateModelInRegistry(edited: AiModel): Promise<void> {
+  const { models } = await GET<{ models: AiModel[] }>('/admin/models');
+  await PUT('/admin/models', { models: models.map((m) => (m.id === edited.id ? edited : m)) });
+}

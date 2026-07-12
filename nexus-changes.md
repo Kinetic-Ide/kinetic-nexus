@@ -11,6 +11,45 @@
 
 ---
 
+**Date:** 2026-07-12 · Session 45  
+**Author:** Abbas  
+**Title:** Phase 7.4c — model details you can actually edit: capabilities, per-modality pricing, and one-click auto-fill  
+
+**Summary:**  
+This session made a model's details fully editable, right where the models live — inside each
+provider pool. Until now a fetched model was added as a plain "chat" entry with no price; now every
+model can be opened and given its real settings.
+
+The editor is **capability-led**: you tick what a model can do — chat, completion, embedding, image,
+speech, transcription, plus vision and tool-use — and it then shows **only the price boxes that
+apply**, so you never wade through fields that don't fit. A text model asks for input and output
+price per million tokens and its context and output limits; an image model asks for a price per
+image; a speech model asks for the classic text-to-speech price per million characters **and**, for
+the newer realtime "voice" models, a separate audio-input and audio-output token price; a
+transcription model asks for a per-file price. This directly answers the question of how speech
+pricing should work: classic text-to-speech is charged on the text you send, while the new realtime
+voice models are charged on audio in and audio out separately — the editor now captures both.
+
+The second half is a real time-saver: an **Auto-fill pricing** button. Nexus now ships a built-in
+price reference for the common models across the major providers, so one click fills in a model's
+prices, context size, and capabilities for you to review and adjust — no hunting through provider
+price pages, and it works fully offline. Prices are a starting point you confirm, never billed
+blindly.
+
+Each model in a pool now shows its capabilities and headline price at a glance, with edit and remove
+right there. A small, safe internal fix was also made along the way so buttons inside a form can
+never submit it by accident.
+
+No database change was needed — the settings all fit the existing model records. Verified end-to-end
+in a live browser: the editable model list, the capability-driven price boxes (including the speech
+and audio-token fields), and the auto-fill all work, with no errors. Both the gateway and the
+dashboard pass their full quality gates.
+
+**Still to come (noted, not yet built):** editing a provider or a key after creation, enforcing the
+per-key user cap, and richer extra-header support for providers whose model list needs it.
+
+---
+
 **Date:** 2026-07-12 · Session 44  
 **Author:** Abbas  
 **Title:** Phase 7.4b — Nexus becomes the whole story: live model discovery, folded-in models, per-key limits  

@@ -52,6 +52,10 @@ export interface AiModel {
   imagePrice:            number;
   speechPricePer1MChars: number;
   transcriptionPrice:    number;
+  // Realtime/omni audio models bill audio as tokens, separately per direction (Phase 7.4c) —
+  // distinct from classic TTS (per input character) and STT (per file). 0 when not an audio model.
+  audioInputPer1M:       number;
+  audioOutputPer1M:      number;
   contextWindow:   number;
   maxTokens:       number;
 }
@@ -101,6 +105,8 @@ export function normalizeModel(raw: Record<string, unknown>): AiModel {
     imagePrice:            num(raw.imagePrice),
     speechPricePer1MChars: num(raw.speechPricePer1MChars),
     transcriptionPrice:    num(raw.transcriptionPrice),
+    audioInputPer1M:       num(raw.audioInputPer1M),
+    audioOutputPer1M:      num(raw.audioOutputPer1M),
     contextWindow:   num(raw.contextWindow),
     maxTokens:       num(raw.maxTokens),
   };

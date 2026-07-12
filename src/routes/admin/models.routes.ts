@@ -18,6 +18,7 @@
 import { FastifyInstance }      from 'fastify';
 import { z }                    from 'zod';
 import { getModelRegistry, updateModelRegistry, normalizeModel } from '../../services/model.service';
+import { getPricingCatalog }    from '../../services/pricingCatalog.service';
 import { CAPABILITIES }         from '../../lib/modelSelect';
 import { adminGuard, adminOwnerGuard } from './guard';
 
@@ -40,6 +41,8 @@ const modelSchema = z.object({
   imagePrice:            z.number().min(0).default(0),
   speechPricePer1MChars: z.number().min(0).default(0),
   transcriptionPrice:    z.number().min(0).default(0),
+  audioInputPer1M:       z.number().min(0).default(0),
+  audioOutputPer1M:      z.number().min(0).default(0),
   contextWindow:   z.number().int().min(0).default(0),
   maxTokens:       z.number().int().min(0).default(0),
 }).passthrough();
@@ -52,6 +55,12 @@ export default async function adminModelsRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/models', adminGuard, async (_req, reply) => {
     const models = await getModelRegistry();
     return reply.send({ models, capabilities: CAPABILITIES });
+  });
+
+  // The bundled pricing reference the model editor's "auto-fill" reads. Indicative prices the
+  // operator confirms before saving — never authoritative billing on its own.
+  fastify.get('/admin/models/pricing-catalog', adminGuard, async (_req, reply) => {
+    return reply.send({ catalog: getPricingCatalog() });
   });
 
   fastify.put('/admin/models', adminOwnerGuard, async (request, reply) => {
