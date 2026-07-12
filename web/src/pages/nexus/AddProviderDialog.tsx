@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { POST, ApiError } from '../../api';
 import { Modal, Field, Input, Select, FieldRow, Button, FormError } from '../../ui';
+import { ProviderFields, type ProviderConn } from './ProviderFields';
 
 // Create a provider pool. Mirrors POST /admin/providers (providers.routes.ts). Every pool carries
 // how to reach the provider AND how to read its model list (Model Fetch URL + Model ID Path), so the
@@ -20,18 +21,20 @@ const DEFAULTS: Record<string, { baseUrl: string; authHeader: string; authPrefix
 
 const slugify = (v: string) => v.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
+// A fresh connection block seeded from a provider's defaults (model-fetch URL is left blank — it
+// falls back to base + /models).
+const connFromDefaults = (p: string): ProviderConn => {
+  const d = DEFAULTS[p] ?? DEFAULTS.custom;
+  return { preferredModel: '', baseUrl: d.baseUrl, modelFetchUrl: '', authHeader: d.authHeader, authPrefix: d.authPrefix, modelIdPath: d.modelIdPath };
+};
+
 export function AddProviderDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName]           = useState('');
   const [slug, setSlug]           = useState('');
   const [slugEdited, setSlugEd]   = useState(false);
   const [provider, setProvider]   = useState<string>('openai');
   const [tier, setTier]           = useState<string>('standard');
-  const [preferredModel, setPM]   = useState('');
-  const [baseUrl, setBaseUrl]     = useState(DEFAULTS.openai.baseUrl);
-  const [modelFetchUrl, setMFU]   = useState('');
-  const [authHeader, setAuthH]    = useState(DEFAULTS.openai.authHeader);
-  const [authPrefix, setAuthP]    = useState(DEFAULTS.openai.authPrefix);
-  const [modelIdPath, setMIP]     = useState(DEFAULTS.openai.modelIdPath);
+  const [conn, setConn]           = useState<ProviderConn>(connFromDefaults('openai'));
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -39,8 +42,7 @@ export function AddProviderDialog({ onClose, onCreated }: { onClose: () => void;
   // picks the provider first, then tweaks.
   const onProvider = (value: string) => {
     setProvider(value);
-    const d = DEFAULTS[value] ?? DEFAULTS.custom;
-    setBaseUrl(d.baseUrl); setAuthH(d.authHeader); setAuthP(d.authPrefix); setMIP(d.modelIdPath);
+    setConn(connFromDefaults(value));
   };
 
   const effectiveSlug = slugEdited ? slug : slugify(name);
@@ -57,12 +59,12 @@ export function AddProviderDialog({ onClose, onCreated }: { onClose: () => void;
         slug: effectiveSlug,
         provider,
         tier,
-        ...(preferredModel.trim() ? { preferredModel: preferredModel.trim() } : {}),
-        ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
-        ...(modelFetchUrl.trim() ? { modelFetchUrl: modelFetchUrl.trim() } : {}),
-        ...(authHeader.trim() ? { authHeader: authHeader.trim() } : {}),
-        ...(authPrefix.trim() ? { authPrefix: authPrefix.trim() } : {}),
-        ...(modelIdPath.trim() ? { modelIdPath: modelIdPath.trim() } : {}),
+        ...(conn.preferredModel.trim() ? { preferredModel: conn.preferredModel.trim() } : {}),
+        ...(conn.baseUrl.trim() ? { baseUrl: conn.baseUrl.trim() } : {}),
+        ...(conn.modelFetchUrl.trim() ? { modelFetchUrl: conn.modelFetchUrl.trim() } : {}),
+        ...(conn.authHeader.trim() ? { authHeader: conn.authHeader.trim() } : {}),
+        ...(conn.authPrefix.trim() ? { authPrefix: conn.authPrefix.trim() } : {}),
+        ...(conn.modelIdPath.trim() ? { modelIdPath: conn.modelIdPath.trim() } : {}),
       });
       onCreated();
       onClose();
@@ -113,30 +115,7 @@ export function AddProviderDialog({ onClose, onCreated }: { onClose: () => void;
           </Field>
         </FieldRow>
 
-        <Field label="Preferred model" hint="optional">
-          <Input value={preferredModel} placeholder="gpt-4o" onInput={(e) => setPM((e.target as HTMLInputElement).value)} />
-        </Field>
-
-        <Field label="Base URL">
-          <Input value={baseUrl} placeholder="https://api.openai.com/v1" onInput={(e) => setBaseUrl((e.target as HTMLInputElement).value)} />
-        </Field>
-
-        <Field label="Model fetch URL" hint="optional — defaults to base + /models">
-          <Input value={modelFetchUrl} placeholder="https://api.example.com/v1/models" onInput={(e) => setMFU((e.target as HTMLInputElement).value)} />
-        </Field>
-
-        <FieldRow>
-          <Field label="Auth header">
-            <Input value={authHeader} onInput={(e) => setAuthH((e.target as HTMLInputElement).value)} />
-          </Field>
-          <Field label="Auth prefix" hint="optional">
-            <Input value={authPrefix} placeholder="Bearer" onInput={(e) => setAuthP((e.target as HTMLInputElement).value)} />
-          </Field>
-        </FieldRow>
-
-        <Field label="Model ID path" hint="where model ids live in the list response">
-          <Input value={modelIdPath} placeholder="data[].id" onInput={(e) => setMIP((e.target as HTMLInputElement).value)} />
-        </Field>
+        <ProviderFields conn={conn} onChange={(patch) => setConn((c) => ({ ...c, ...patch }))} />
 
         <button type="submit" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
       </form>

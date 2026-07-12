@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { POST, DEL, type NexusKeyHealth } from '../../api';
 import { Badge, Button } from '../../ui';
+import { EditKeyDialog } from './EditKeyDialog';
 import { relativeTime } from '../../lib/format';
 import s from '../pages.module.css';
 
@@ -18,6 +19,7 @@ function health(k: NexusKeyHealth): { tone: 'green' | 'yellow' | 'red'; label: s
 export function KeyRow({ k, onChanged }: { k: NexusKeyHealth; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [probe, setProbe] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const h = health(k);
 
   const run = async (action: 'ban' | 'unban' | 'cool' | 'test' | 'delete') => {
@@ -56,11 +58,14 @@ export function KeyRow({ k, onChanged }: { k: NexusKeyHealth; onChanged: () => v
       </div>
       <div class={s.keyActions}>
         <Button size="sm" variant="ghost" onClick={() => run('test')} disabled={busy !== null}>Test</Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={busy !== null}>Edit</Button>
         {!h.banned && !h.cooling && <Button size="sm" variant="ghost" onClick={() => run('cool')} disabled={busy !== null}>Cool</Button>}
         {(h.banned || h.cooling) && <Button size="sm" variant="ghost" onClick={() => run('unban')} disabled={busy !== null}>Restore</Button>}
         {!h.banned && <Button size="sm" variant="ghost" onClick={() => run('ban')} disabled={busy !== null}>Ban</Button>}
         <Button size="sm" variant="danger" onClick={() => run('delete')} disabled={busy !== null}>Delete</Button>
       </div>
+
+      {editing && <EditKeyDialog k={k} onClose={() => setEditing(false)} onSaved={onChanged} />}
     </div>
   );
 }

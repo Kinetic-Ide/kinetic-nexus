@@ -78,6 +78,44 @@ export default async function adminKeysRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ key: { ...key, encryptedKey: undefined } });
   });
 
+  // Edit an existing key's label, limits, and (optionally) the credential itself. Deliberately
+  // additive to create: status, coolingUntil, and lastUsedAt are never touched here, so an edit
+  // can't accidentally unban a key or reset its health — those stay with ban/unban/cool. Supplying
+  // `apiKey` rotates the credential (re-encrypt + re-mask); omitting it leaves the stored key intact.
+  const keyEditSchema = z.object({
+    apiKey:      z.string().min(1).optional(),
+    label:       z.string().nullish(),
+    rpmLimit:    z.number().int().min(1).optional(),
+    tpmLimit:    z.number().int().min(1).optional(),
+    maxUsers:    z.number().int().min(1).optional(),
+    ownerTeamId: z.string().uuid().nullish(),
+  });
+
+  fastify.patch('/admin/keys/:id', adminOwnerGuard, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body   = keyEditSchema.parse(request.body);
+    // Reject an unknown owner up front (same reasoning as create): the FK would 500, and a silent
+    // drop would leak a private credential into the shared pool.
+    if (body.ownerTeamId) {
+      const owner = await prisma.team.findUnique({ where: { id: body.ownerTeamId }, select: { id: true } });
+      if (!owner) return reply.code(400).send({ error: 'ownerTeamId does not match any team' });
+    }
+    // Build the update from only the fields that were sent, so an edit never clobbers an
+    // untouched column with a default.
+    const data: Record<string, unknown> = {};
+    if (body.label !== undefined)       data.label       = body.label;
+    if (body.rpmLimit !== undefined)    data.rpmLimit    = body.rpmLimit;
+    if (body.tpmLimit !== undefined)    data.tpmLimit    = body.tpmLimit;
+    if (body.maxUsers !== undefined)    data.maxUsers    = body.maxUsers;
+    if (body.ownerTeamId !== undefined) data.ownerTeamId = body.ownerTeamId ?? null;
+    if (body.apiKey) {
+      data.encryptedKey = encrypt(body.apiKey);
+      data.maskedKey    = maskKey(body.apiKey);
+    }
+    const key = await prisma.nexusKey.update({ where: { id }, data });
+    return reply.send({ key: { ...key, encryptedKey: undefined } });
+  });
+
   fastify.delete('/admin/keys/:id', adminOwnerGuard, async (request, reply) => {
     const { id } = request.params as { id: string };
     await prisma.nexusKey.delete({ where: { id } });
