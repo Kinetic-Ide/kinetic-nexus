@@ -17,10 +17,24 @@
 // Usage totals, per-team breakdowns, and daily time series.
 import { FastifyInstance }      from 'fastify';
 import { getUsageSummary, getUsageByTeamKey, getTimeSeriesByTeam, getTimeSeriesByModel } from '../../services/token.service';
+import { getAnalyticsOverview, type AnalyticsPeriod } from '../../services/analytics.service';
 import { prisma }              from '../../lib/prisma';
 import { adminGuard }           from './guard';
 
+const PERIODS: AnalyticsPeriod[] = ['today', '7d', '30d', '90d'];
+
 export default async function adminAnalyticsRoutes(fastify: FastifyInstance) {
+  // ── Analytics aggregate (Phase 7.5) ───────────────────────────────
+  // One read behind the whole Analytics page: reliability, speed, spend, and cache savings.
+  fastify.get('/admin/analytics/overview', adminGuard, async (request, reply) => {
+    const { period, from, to } = request.query as { period?: string; from?: string; to?: string };
+    // An unrecognised period falls back to the default rather than 500ing on a typo'd query string.
+    const p      = PERIODS.includes(period as AnalyticsPeriod) ? (period as AnalyticsPeriod) : '7d';
+    const cSince = from ? new Date(from + 'T00:00:00.000Z') : undefined;
+    const cUntil = to   ? new Date(to   + 'T23:59:59.999Z') : undefined;
+    return reply.send(await getAnalyticsOverview(p, cSince, cUntil));
+  });
+
   // ── Usage / Analytics ─────────────────────────────────────────────
 
   fastify.get('/admin/usage', adminGuard, async (request, reply) => {

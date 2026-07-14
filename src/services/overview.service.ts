@@ -24,6 +24,7 @@ import { prisma } from '../lib/prisma';
 import { getUsageSummary, getUsageByTeamKey } from './token.service';
 import { queryAuditLogs } from './audit.service';
 import { getModelRegistry } from './model.service';
+import { lastNDates, fillSeries } from '../lib/series';
 
 const TOP_N       = 5;
 const RECENT_LOGS = 8;
@@ -51,21 +52,11 @@ export interface OverviewPayload {
   recentLogs: { id: string; action: string; method: string; actorRole: string; status: number; target: string | null; createdAt: string }[];
 }
 
-/** The UTC dates of the last `WINDOW_DAYS` days, oldest first — so the chart always shows a full week. */
-function windowDates(now: Date): string[] {
-  const out: string[] = [];
-  for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
-    out.push(new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10));
-  }
-  return out;
-}
-
 /** Project the (gap-prone) day buckets onto a full week, filling absent days with zeros. */
 function fillWindow(byDay: OverviewDay[], now: Date): OverviewDay[] {
-  const found = new Map(byDay.map((d) => [d.date, d]));
-  return windowDates(now).map((date) =>
-    found.get(date) ?? { date, inputTokens: 0, outputTokens: 0, tokens: 0, usd: 0, requests: 0 },
-  );
+  return fillSeries(byDay, lastNDates(WINDOW_DAYS, now), (date) => (
+    { date, inputTokens: 0, outputTokens: 0, tokens: 0, usd: 0, requests: 0 }
+  ));
 }
 
 export async function getOverview(now = new Date()): Promise<OverviewPayload> {
