@@ -10,6 +10,7 @@ export { EmptyState } from './EmptyState';
 export { CopyField } from './CopyField';
 export { CodeBlock } from './CodeBlock';
 export { LineChart } from './LineChart';
+export { ChartCard } from './ChartCard';
 export { Table, type Column } from './Table';
 export { Modal } from './Modal';
 export { Field, Input, Select, FieldRow, FormError, FormNote } from './Field';

@@ -5,14 +5,16 @@ import { SECTIONS } from './nav';
 import { Overview } from './pages/Overview';
 import { Nexus } from './pages/Nexus';
 import { Connect } from './pages/Connect';
+import { Analytics } from './pages/Analytics';
 import { Placeholder } from './pages/Placeholder';
 import { PageHeader, Card } from './ui';
 
 // Sections with a redesigned page of their own; the rest fall through to Placeholder until their
 // phase lands. Models folded into Nexus in P7.4b — a pool now owns its own models.
 const PAGES: Record<string, FunctionComponent> = {
-  nexus:   Nexus,
-  connect: Connect,
+  nexus:     Nexus,
+  connect:   Connect,
+  analytics: Analytics,
 };
 
 function NotFound() {

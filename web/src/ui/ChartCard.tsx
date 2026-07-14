@@ -1,10 +1,11 @@
 import type { ComponentChildren } from 'preact';
-import { Card, LineChart } from '../../ui';
-import s from '../pages.module.css';
+import { Card } from './Card';
+import { LineChart } from './LineChart';
+import s from './ui.module.css';
 
-// A titled metric card: a headline figure over its 7-day sparkline. Used four times on the
-// Overview, so the shape lives here once rather than being repeated per metric. `accent` gives each
-// card its own persistent hue (line + fill + the headline number's tick) so the four read as
+// A titled metric card: a headline figure over its trend line. Shared by the Overview and Analytics
+// pages, so the shape lives here once rather than being repeated per metric. `accent` gives each
+// card its own persistent hue (line + fill + the headline number's tick) so the cards read as
 // distinct metrics at a glance; `tooltip` lets the hover show the whole day, not just this series.
 interface Props {
   title:     string;

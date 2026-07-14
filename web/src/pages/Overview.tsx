@@ -1,9 +1,8 @@
 import { Activity, ArrowDownUp, KeyRound, Cpu, Users, DollarSign } from 'lucide-preact';
-import { PageHeader, StatCard, Badge, Spinner, Button } from '../ui';
+import { PageHeader, StatCard, Badge, Spinner, Button, ChartCard } from '../ui';
 import { useApi } from '../hooks/useApi';
 import { compactNumber, currency, shortDate } from '../lib/format';
 import type { Overview as OverviewData } from '../api';
-import { ChartCard } from './overview/ChartCard';
 import { TopModels } from './overview/TopModels';
 import { TopKeys } from './overview/TopKeys';
 import { RecentActivity } from './overview/RecentActivity';

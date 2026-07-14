@@ -178,3 +178,9 @@
 .chartTipRow span:last-child { font-weight: 600; }
 .chartTipDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .chartTipRowActive span:first-child { color: var(--text); }
+
+/* ── ChartCard: a headline figure over its trend line (Overview + Analytics) ── */
+.chartCard { display: flex; flex-direction: column; gap: 4px; }
+.chartHead { display: flex; align-items: center; gap: 9px; }
+.chartTick { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.chartBig { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }

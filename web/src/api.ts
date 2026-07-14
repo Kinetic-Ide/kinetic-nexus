@@ -93,6 +93,31 @@ export interface PricingCatalogEntry {
   contextWindow?: number; maxTokens?: number; hasVision?: boolean; hasToolCalling?: boolean;
 }
 
+// Mirrors GET /admin/analytics/overview (analytics.service.ts) — the single read behind Analytics.
+export type AnalyticsPeriod = 'today' | '7d' | '30d' | '90d';
+
+export interface AnalyticsDay {
+  date: string; requests: number; successes: number; errors: number;
+  usd: number; savedUsd: number; cacheHits: number; avgLatencyMs: number;
+}
+
+export interface AnalyticsOverview {
+  period: AnalyticsPeriod;
+  since:  string;
+  until:  string;
+  totals: {
+    requests: number; successes: number; errors: number; successRate: number;
+    inputTokens: number; outputTokens: number; totalTokens: number; estimatedUsd: number;
+    avgLatencyMs: number; p95LatencyMs: number;
+    cacheHits: number; cacheHitRate: number; cacheSavedUsd: number;
+  };
+  byDay:      AnalyticsDay[];
+  byModel:    { model: string; requests: number; tokens: number; usd: number }[];
+  byProvider: { provider: string; requests: number; errors: number; tokens: number; usd: number }[];
+  byModality: { unit: string; requests: number; quantity: number; tokens: number; usd: number }[];
+  byOutcome:  { outcome: string; requests: number }[];
+}
+
 // Mirrors GET /admin/config (system.routes.ts).
 export interface GatewayConfig { baseUrl: string; nexusApiKey: string | null; isFirstRun: boolean; }
 

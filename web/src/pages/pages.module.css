@@ -3,11 +3,6 @@
 .cols2 { grid-template-columns: 1fr 1fr; }
 .section { margin-top: 22px; }
 
-.chartCard { display: flex; flex-direction: column; gap: 4px; }
-.chartHead { display: flex; align-items: center; gap: 9px; }
-.chartTick { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-.chartBig { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
-
 .scaffold { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
 .scaffold code { font-family: var(--font-mono); color: var(--accent); background: var(--accent-bg); padding: 1px 6px; border-radius: 5px; }
 
@@ -119,3 +114,23 @@
   .cols4 { grid-template-columns: 1fr 1fr; }
   .cols2 { grid-template-columns: 1fr; }
 }
+
+/* ── Analytics ── */
+.dataNote { margin-top: 12px; font-size: 12px; color: var(--subtle); line-height: 1.55; }
+.errCount { color: var(--red); font-variant-numeric: tabular-nums; font-weight: 600; }
+.zeroCount { color: var(--subtle); font-variant-numeric: tabular-nums; }
+.modalityUnit { color: var(--subtle); font-size: 11.5px; }
+.outcomeCell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.outcomeHelp { font-size: 11.5px; color: var(--subtle); }
+
+/* Cache-savings card: the headline saving, its two supporting figures, and a daily trend. */
+.saveCard { display: flex; flex-direction: column; gap: 14px; }
+.saveTop { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.saveFigure { display: flex; align-items: center; gap: 12px; }
+.saveIcon { display: inline-flex; padding: 9px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); color: var(--green); }
+.saveBig { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--green); }
+.saveSub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.saveStats { display: flex; gap: 26px; }
+.saveStatVal { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.saveStatLbl { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.saveEmpty { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
