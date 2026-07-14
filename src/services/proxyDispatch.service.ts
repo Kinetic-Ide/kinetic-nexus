@@ -147,7 +147,9 @@ export async function dispatchProxy(
   }
 
   const scope = await resolveRequestScope(team);
-  const route = await discoverBestPool(reserveTokens, null, scope, capability);
+  // OpenAI-standard end-user id (when the caller sends one), for per-key Max Users enforcement.
+  const userId = typeof body.user === 'string' ? body.user : null;
+  const route = await discoverBestPool(reserveTokens, null, scope, capability, userId);
   if (!route) {
     observe('no_capacity');
     const isolated = isIsolated(scope);

@@ -21,6 +21,12 @@ export const RPM_TPM_WINDOW_SECONDS = 60;
 
 export function rpmKey(keyId: string): string { return `nexus:rpm:${keyId}`; }
 export function tpmKey(keyId: string): string { return `nexus:tpm:${keyId}`; }
+export function usersKey(keyId: string): string { return `nexus:users:${keyId}`; }
+
+// Rolling window over which a key's distinct end-users are counted for the per-key Max Users cap.
+// A day by default: "how many distinct people this key serves" is a coarse fairness cap, not a
+// per-second rate limit (RPM/TPM remain the hard limits).
+export const MAXUSERS_WINDOW_SECONDS = parseInt(process.env.NEXUS_MAXUSERS_WINDOW_SECONDS ?? '86400', 10);
 
 // Atomic admission: check RPM and TPM budgets and, only if BOTH have headroom,
 // increment the request counter by one and reserve `reserve` tokens — all in a
@@ -80,4 +86,41 @@ export async function reconcileTpm(keyId: string, reserved: number, actual: numb
   const giveBack = Math.floor(reserved - actual);
   if (giveBack <= 0) return;
   await redis.eval(RECONCILE_LUA, 1, tpmKey(keyId), String(giveBack));
+}
+
+// Per-key Max Users admission, atomic in one round-trip: a user already in the key's window set is
+// always admitted; a *new* user is admitted (and recorded) only while the set is below the cap;
+// otherwise the key is full for new users and the caller rotates to the next key. EXPIRE renews the
+// rolling window on every admitted new user.
+const ADMIT_USER_LUA = `
+local exists = redis.call('SISMEMBER', KEYS[1], ARGV[1])
+if exists == 1 then return 1 end
+local card = redis.call('SCARD', KEYS[1])
+if card >= tonumber(ARGV[2]) then return 0 end
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+`;
+
+/**
+ * Admit one end-user against a key's Max Users cap. When the request carries no user identity the
+ * cap cannot be enforced, so this admits unconditionally — a missing signal never blocks traffic.
+ * A known user always passes; a new user passes only while the key is below `maxUsers`.
+ */
+export async function admitUser(
+  keyId: string,
+  maxUsers: number,
+  userId: string | null | undefined,
+  windowSeconds = MAXUSERS_WINDOW_SECONDS,
+): Promise<boolean> {
+  if (!userId) return true;
+  const result = await redis.eval(
+    ADMIT_USER_LUA,
+    1,
+    usersKey(keyId),
+    userId,
+    String(Math.max(1, Math.floor(maxUsers))),
+    String(windowSeconds),
+  );
+  return result === 1;
 }

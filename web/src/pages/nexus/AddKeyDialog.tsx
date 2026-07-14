@@ -119,7 +119,7 @@ export function AddKeyDialog({
         </Field>
 
         <FieldRow>
-          <Field label="Max users">
+          <Field label="Max users" hint="distinct users/day">
             <Input type="number" min={1} value={maxUsers} onInput={(e) => setMaxUsers((e.target as HTMLInputElement).value)} />
           </Field>
           <Field label="RPM limit" hint="per minute">

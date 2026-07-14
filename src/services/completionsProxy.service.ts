@@ -269,8 +269,11 @@ export async function handleProxy(
   const reserve  = computeReserve(effectiveMessages, body.max_tokens, DEFAULT_MAX_TOKENS_RESERVE);
   // Cache-aware sticky routing: pin a continuing conversation to its last key.
   const session  = sessionHash({ messages, user: body.user }, reqHeaders);
+  // OpenAI-standard end-user id, used to enforce each key's Max Users cap. Absent → no per-user
+  // enforcement (see admitUser).
+  const userId   = typeof body.user === 'string' ? body.user : null;
 
-  const route = await discoverBestPool(reserve, session, scope);
+  const route = await discoverBestPool(reserve, session, scope, 'chat', userId);
   if (!route) {
     observe('no_capacity');
     const isolated = isIsolated(scope);

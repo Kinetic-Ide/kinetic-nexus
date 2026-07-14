@@ -16,7 +16,7 @@
 
 import { prisma }           from '../lib/prisma';
 import { decrypt, maskKey } from '../lib/encryption';
-import { admitKey }         from '../lib/admission';
+import { admitKey, admitUser } from '../lib/admission';
 import * as breaker         from '../lib/breaker';
 import { getStickyKeyId }   from '../lib/sticky';
 import { costOrder, effectivePrice } from '../lib/routing';
@@ -118,6 +118,7 @@ async function tryPickKey(
   reserveTokens: number,
   ownerTeamId: string | null,
   model: RouteModel,
+  userId: string | null,
 ): Promise<Omit<NexusRoute, 'wasDowngrade' | 'sticky'> | null> {
   if (!model.modelString) return null;
 
@@ -137,6 +138,12 @@ async function tryPickKey(
     // Circuit breaker gate first, so an open (cooling) key never burns RPM/TPM.
     const gate = await breaker.acquire(key.id);
     if (gate === 'open') continue;
+
+    // Max Users cap next, before RPM/TPM admission: a key that is full for a *new* end-user is
+    // skipped cheaply, without consuming rate budget. A known user (or a request with no user
+    // identity) always passes. See admitUser for the "no signal → never block" rule.
+    const userOk = await admitUser(key.id, key.maxUsers, userId);
+    if (!userOk) continue;
 
     // Atomic RPM + TPM admission. A key at either limit is skipped so the loop
     // rotates to the next key/tier; the caller only fails once every key is
@@ -166,6 +173,7 @@ async function tryStickyKey(
   reserveTokens: number,
   scope: RoutingScope,
   pickModel: (provider: ProviderRow) => RouteModel | null,
+  userId: string | null,
 ): Promise<NexusRoute | null> {
   const key = await prisma.nexusKey.findUnique({ where: { id: keyId }, include: { provider: true } });
   if (!key || key.status === 'banned' || !key.provider.isActive) return null;
@@ -184,6 +192,10 @@ async function tryStickyKey(
 
   const gate = await breaker.acquire(key.id);
   if (gate === 'open') return null;
+
+  // Even a pinned key honours its Max Users cap: a new end-user over the cap falls through to
+  // normal discovery rather than riding the sticky pin.
+  if (!(await admitUser(key.id, key.maxUsers, userId))) return null;
 
   const admitted = await admitKey(key.id, key.rpmLimit, key.tpmLimit, reserveTokens);
   if (!admitted) return null;
@@ -205,6 +217,7 @@ async function sweepModels(
   candidates: SelectableModel[],
   reserveTokens: number,
   ownerTeamId: string | null,
+  userId: string | null,
 ): Promise<NexusRoute | null> {
   let higherTierWasExhausted = false;
   let currentTier = candidates[0]?.tier;
@@ -220,7 +233,7 @@ async function sweepModels(
     });
     const routeModel: RouteModel = { modelString: m.modelString, modelId: m.id, tier: m.tier };
     for (const pool of pools) {
-      const route = await tryPickKey(pool, reserveTokens, ownerTeamId, routeModel);
+      const route = await tryPickKey(pool, reserveTokens, ownerTeamId, routeModel, userId);
       if (route) return { ...route, wasDowngrade: higherTierWasExhausted, sticky: false };
     }
   }
@@ -241,6 +254,7 @@ async function legacySweepTiers(
   ownerTeamId: string | null,
   costWeight: number,
   priceOf: PriceOf,
+  userId: string | null,
 ): Promise<NexusRoute | null> {
   let higherTierWasExhausted = false;
 
@@ -254,7 +268,7 @@ async function legacySweepTiers(
 
     for (const provider of ordered) {
       const model: RouteModel = { modelString: provider.preferredModel ?? '', modelId: null, tier };
-      const route = await tryPickKey(provider, reserveTokens, ownerTeamId, model);
+      const route = await tryPickKey(provider, reserveTokens, ownerTeamId, model, userId);
       if (route) return { ...route, wasDowngrade: higherTierWasExhausted, sticky: false };
     }
 
@@ -281,6 +295,7 @@ export async function discoverBestPool(
   sessionKey?: string | null,
   scope: RoutingScope = SHARED_SCOPE,
   capability: Capability = 'chat',
+  userId: string | null = null,
 ): Promise<NexusRoute | null> {
   const costWeight = await getCostWeight();
   const registry   = await getModelRegistry();
@@ -316,7 +331,7 @@ export async function discoverBestPool(
   if (sessionKey) {
     const stickyKeyId = await getStickyKeyId(sessionKey);
     if (stickyKeyId) {
-      const stickyRoute = await tryStickyKey(stickyKeyId, reserveTokens, scope, pickModel);
+      const stickyRoute = await tryStickyKey(stickyKeyId, reserveTokens, scope, pickModel, userId);
       if (stickyRoute) return stickyRoute;
     }
   }
@@ -324,14 +339,14 @@ export async function discoverBestPool(
   if (candidates.length > 0) {
     // Pass 1 — the team's own keys, when it has any.
     if (scope.ownerTeamId) {
-      const owned = await sweepModels(candidates, reserveTokens, scope.ownerTeamId);
+      const owned = await sweepModels(candidates, reserveTokens, scope.ownerTeamId, userId);
       if (owned) return owned;
       // Hard isolation: exhausting your own keys is a 503, not a silent hand-off to
       // credentials you did not bring.
       if (!scope.fallbackToShared) return null;
     }
     // Pass 2 — the shared pool.
-    return sweepModels(candidates, reserveTokens, null);
+    return sweepModels(candidates, reserveTokens, null, userId);
   }
 
   // ── Legacy fallback (chat only) ──
@@ -352,11 +367,11 @@ export async function discoverBestPool(
   }
 
   if (scope.ownerTeamId) {
-    const owned = await legacySweepTiers(reserveTokens, scope.ownerTeamId, costWeight, priceOf);
+    const owned = await legacySweepTiers(reserveTokens, scope.ownerTeamId, costWeight, priceOf, userId);
     if (owned) return owned;
     if (!scope.fallbackToShared) return null;
   }
-  return legacySweepTiers(reserveTokens, null, costWeight, priceOf);
+  return legacySweepTiers(reserveTokens, null, costWeight, priceOf, userId);
 }
 
 export async function getNextCooldownSeconds(): Promise<number> {

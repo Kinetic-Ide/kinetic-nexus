@@ -21,11 +21,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // by team-a. Tests that exercise tier fallback push extra providers onto
 // `state.providers`. `encryptedKey` is irrelevant here — decrypt is stubbed.
 
-type Key = { id: string; providerId: string; encryptedKey: string; ownerTeamId: string | null; status: string; rpmLimit: number; tpmLimit: number };
+type Key = { id: string; providerId: string; encryptedKey: string; ownerTeamId: string | null; status: string; rpmLimit: number; tpmLimit: number; maxUsers: number };
 type Provider = { id: string; tier: string; baseUrl: string; provider: string; authHeader: string; authPrefix: string; preferredModel: string; isActive: boolean; createdAt: Date };
 
 const key = (id: string, ownerTeamId: string | null, providerId = 'p1', status = 'active'): Key =>
-  ({ id, providerId, encryptedKey: `enc-${id}`, ownerTeamId, status, rpmLimit: 60, tpmLimit: 100000 });
+  ({ id, providerId, encryptedKey: `enc-${id}`, ownerTeamId, status, rpmLimit: 60, tpmLimit: 100000, maxUsers: 1000 });
 
 const provider = (id: string, tier: string): Provider => ({
   id, tier, baseUrl: 'https://api.example.com/v1', provider: 'openai',
@@ -68,7 +68,7 @@ const { state, prismaMock } = vi.hoisted(() => {
 
 vi.mock('../lib/prisma',     () => ({ prisma: prismaMock }));
 vi.mock('../lib/encryption', () => ({ decrypt: (s: string) => `dec-${s}`, maskKey: (s: string) => s }));
-vi.mock('../lib/admission',  () => ({ admitKey: vi.fn(async () => true) }));
+vi.mock('../lib/admission',  () => ({ admitKey: vi.fn(async () => true), admitUser: vi.fn(async () => true) }));
 vi.mock('../lib/breaker',    () => ({ acquire: vi.fn(async () => 'closed'), RATE_LIMIT_COOLDOWN_SECONDS: 60 }));
 vi.mock('../lib/sticky',     () => ({ getStickyKeyId: vi.fn(async () => null) }));
 vi.mock('./routing.service', () => ({ getCostWeight: vi.fn(async () => 0) }));
@@ -82,7 +82,7 @@ vi.mock('./notifications.service', () => ({ notificationsArmed: vi.fn(async () =
 import { discoverBestPool, SHARED_SCOPE, reportTierExhausted } from './nexus.service';
 import { notificationsArmed, notify } from './notifications.service';
 import { getStickyKeyId } from '../lib/sticky';
-import { admitKey }       from '../lib/admission';
+import { admitKey, admitUser } from '../lib/admission';
 import type { RoutingScope } from '../lib/scope';
 
 const scopeFor = (teamId: string, fallback: boolean): RoutingScope =>
@@ -91,6 +91,7 @@ const scopeFor = (teamId: string, fallback: boolean): RoutingScope =>
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(admitKey).mockResolvedValue(true);
+  vi.mocked(admitUser).mockResolvedValue(true);
   vi.mocked(getStickyKeyId).mockResolvedValue(null);
   state.providers = [provider('p1', 'premium')];
   state.keys = [key('shared-1', null), key('shared-2', null), key('a-1', 'team-a'), key('a-2', 'team-a')];
@@ -159,6 +160,30 @@ describe('discoverBestPool — BYOK scoping', () => {
   it('defaults to the shared pool when no scope is passed', async () => {
     const route = await discoverBestPool(10);
     expect(route?.byok).toBe(false);
+  });
+});
+
+describe('discoverBestPool — Max Users cap (P7.4d)', () => {
+  it('rotates a new user past a key that is full, to the next key', async () => {
+    // shared-1 is at its Max Users cap for this new user; shared-2 has room.
+    vi.mocked(admitUser).mockImplementation(async (keyId: string) => keyId !== 'shared-1');
+    const route = await discoverBestPool(10, null, SHARED_SCOPE, 'chat', 'user-new');
+    expect(route?.keyId).toBe('shared-2');
+    // The user cap is checked before RPM/TPM admission, so a full key never burns rate budget.
+    expect(admitKey).not.toHaveBeenCalledWith('shared-1', expect.anything(), expect.anything(), expect.anything());
+  });
+
+  it('passes the request through when no user id is supplied (cap cannot be enforced)', async () => {
+    const route = await discoverBestPool(10, null, SHARED_SCOPE);
+    expect(route?.keyId).toBe('shared-1');
+    // Called with a null user id — admitUser itself decides not to block.
+    expect(admitUser).toHaveBeenCalledWith('shared-1', 1000, null);
+  });
+
+  it('returns null when every key is full for a new user', async () => {
+    vi.mocked(admitUser).mockResolvedValue(false);
+    const route = await discoverBestPool(10, null, SHARED_SCOPE, 'chat', 'user-new');
+    expect(route).toBeNull();
   });
 });
 

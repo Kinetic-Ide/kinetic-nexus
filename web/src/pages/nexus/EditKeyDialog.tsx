@@ -58,7 +58,7 @@ export function EditKeyDialog({ k, onClose, onSaved }: { k: NexusKeyHealth; onCl
         </Field>
 
         <FieldRow>
-          <Field label="Max users">
+          <Field label="Max users" hint="distinct users/day">
             <Input type="number" min={1} value={maxUsers} onInput={(e) => setMaxUsers((e.target as HTMLInputElement).value)} />
           </Field>
           <Field label="RPM limit" hint="per minute">
@@ -82,7 +82,10 @@ export function EditKeyDialog({ k, onClose, onSaved }: { k: NexusKeyHealth; onCl
             </button>
           </div>
         </Field>
-        <FormNote>A replaced key is re-encrypted and re-masked; the old value is discarded.</FormNote>
+        <FormNote>
+          A replaced key is re-encrypted and re-masked; the old value is discarded. Max users caps how many
+          distinct end-users this key serves per day, and applies only to requests that identify their user.
+        </FormNote>
 
         <button type="submit" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
       </form>
