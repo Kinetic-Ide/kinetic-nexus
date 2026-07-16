@@ -7,6 +7,65 @@
 
 ---
 
+## 2026-07-16 (Session 59)
+
+---
+
+**Date:** 2026-07-16 · Session 59  
+**Title:** A Health section — the gateway's own vitals, measured for real  
+
+**Summary:**  
+The dashboard could tell you everything about your traffic and your providers, but nothing about the
+gateway itself. If Redis was running out of memory, if the database was slowing down, if the process
+was choking — none of it was visible anywhere. This change adds a **Health** section that answers the
+question the other sections don't: *is my gateway itself healthy?* (Analytics answers "what did the
+traffic do"; Nexus answers "are my providers healthy" — this is the third question.)
+
+**What you see.** A status banner gives one verdict for the whole gateway — and when something is
+wrong it names the culprit plainly ("PostgreSQL query latency above threshold · 3 of 4 checks
+healthy") rather than a vague warning light. Under it, a minute-by-minute colour strip shows the last
+hour at a glance, so a blip that happened while you were at lunch is still visible when you get back.
+Then one card per dependency — the process itself, Redis, PostgreSQL — each with its current response
+time, a one-hour trend line, and its slowest moments (the 95th and 99th percentile), because "it was
+fine until ten minutes ago and it's climbing" is what actually tells you to act.
+
+**The detail panels go as deep as an enterprise tool.** Redis: memory used against its configured
+limit with the headroom stated, cache hit rate, operations per second, evicted keys (the early sign
+of memory pressure), fragmentation. PostgreSQL: connections used of the maximum, how many reads are
+served from memory versus disk, database size, the largest tables with their sizes, deadlocks,
+queries spilling to disk. The process: heap and container memory against their real limits, CPU and
+memory trends, event-loop responsiveness. Under each figure the page states its meaning — "none — no
+pressure", "healthy < 1.5" — so you don't need to be a database administrator to read it.
+
+**Honesty is the design rule.** Everything shown is genuinely measured, and where a number does not
+exist the page says so instead of inventing one: no "disk free" for PostgreSQL (a database cannot
+report the disk under it), no memory percentage when Redis has no configured limit (there is no
+ceiling to measure against), and container memory is judged against the container's real limit — not
+the host machine's RAM, which is the number most tools wrongly use inside Docker. A gap in history is
+shown as a gap, and a freshly restarted gateway says "collecting" rather than pretending it has an
+hour of history.
+
+**Your infrastructure gets the same truth.** Until now the gateway's "are you okay?" URL always
+answered yes — without checking anything. A load balancer would have kept sending traffic to a
+gateway whose database was down. There are now two probe URLs doing the two different jobs properly:
+the old one stays a cheap "the process is alive" signal, and a new **`/ready`** genuinely checks
+Redis and PostgreSQL, refusing traffic (with per-check detail) when a dependency is dead. The Health
+page renders exactly those checks — measured value, threshold, verdict — so what you see and what
+your load balancer sees are the same thing.
+
+Two more tabs round out the section: **Providers**, a read-only summary of upstream capacity (how
+many keys are active, cooling, or dead, per tier) that links to Nexus where they are managed; and
+**Benchmarks**, which honestly says it is not built yet and what it will do — no invented numbers.
+
+Behind it all is a small sampler that probes everything every 15 seconds and keeps the last hour in
+memory — the trends and percentiles are real measurements, not decoration. All of it is covered by
+tests, including the failure cases: a dead dependency, a database that refuses introspection, a Redis
+with no memory limit. The complete automated gate — code style, type safety, tests, production build,
+and a dependency security scan — passes cleanly on both the gateway and the dashboard, with no known
+vulnerabilities.
+
+---
+
 ## 2026-07-16 (Session 58)
 
 ---

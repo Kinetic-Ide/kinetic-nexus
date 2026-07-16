@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Network, Plug, BarChart3, Users, Building2,
-  Shield, DatabaseZap, ScrollText, Settings, UserCog,
+  Shield, DatabaseZap, HeartPulse, ScrollText, Settings, UserCog,
 } from 'lucide-preact';
 import type { ComponentType } from 'preact';
 
@@ -25,6 +25,10 @@ export const SECTIONS: Section[] = [
   { id: 'enterprise', label: 'Enterprise', path: '/enterprise', icon: Building2,       group: 'workspace' },
   { id: 'security',   label: 'Security',   path: '/security',   icon: Shield,          group: 'workspace' },
   { id: 'caching',    label: 'Caching',    path: '/caching',    icon: DatabaseZap,     group: 'workspace' },
+  // Path is /status, NOT /health: GET /health is the gateway's liveness probe (a JSON route the SPA
+  // fallback deliberately excludes), so a deep link to /health would render `{ok:true}` instead of
+  // this section.
+  { id: 'health',     label: 'Health',     path: '/status',     icon: HeartPulse,      group: 'workspace' },
   { id: 'logs',       label: 'Logs',       path: '/logs',       icon: ScrollText,      group: 'system' },
   { id: 'settings',   label: 'Settings',   path: '/settings',   icon: Settings,        group: 'system' },
   { id: 'admin',      label: 'Admin',      path: '/admin',      icon: UserCog,         group: 'system' },

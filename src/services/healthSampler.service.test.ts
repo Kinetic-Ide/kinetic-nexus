@@ -1,0 +1,135 @@
+/*
+ * Copyright (c) 2026 Alayra Systems Pvt. Limited (Pakistan)
+ * & Alayra Systems LLC (USA).
+ *
+ * Alayra Nexus™ is a trademark of Alayra Systems. Use of the name or logo
+ * is not granted by the software license below.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * A copy of the License is in the LICENSE file at the repository root,
+ * or at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ * ANY KIND, either express or implied. See the License for details.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { redisMock, queryRaw } = vi.hoisted(() => ({
+  redisMock: { ping: vi.fn(async () => 'PONG'), info: vi.fn(async () => 'redis_version:7.2.4\r\nused_memory:1000\r\nmaxmemory:0\r\nkeyspace_hits:90\r\nkeyspace_misses:10') },
+  queryRaw: vi.fn(async () => [{ '?column?': 1 }]),
+}));
+vi.mock('../lib/redis',  () => ({ redis: redisMock }));
+vi.mock('../lib/prisma', () => ({ prisma: { $queryRaw: queryRaw } }));
+
+import {
+  takeSample, runReadyChecks, getHealthOverview, stopHealthSampler,
+} from './healthSampler.service';
+
+beforeEach(() => {
+  redisMock.ping.mockClear();
+  redisMock.ping.mockResolvedValue('PONG');
+  queryRaw.mockClear();
+  queryRaw.mockResolvedValue([{ '?column?': 1 }] as never);
+});
+
+// The buffer is module state; every test starts from an empty hour.
+afterEach(() => stopHealthSampler());
+
+describe('takeSample', () => {
+  it('records a healthy tick with measured round-trips', async () => {
+    const s = await takeSample(1_000_000);
+    expect(s.redisOk).toBe(true);
+    expect(s.redisMs).toBeGreaterThanOrEqual(0);
+    expect(s.pgOk).toBe(true);
+    expect(s.pgMs).toBeGreaterThanOrEqual(0);
+    expect(s.rssBytes).toBeGreaterThan(0);
+  });
+
+  it('a failed probe is a data point, not an exception', async () => {
+    redisMock.ping.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const s = await takeSample(1_000_000);
+    expect(s.redisOk).toBe(false);
+    expect(s.redisMs).toBeNull();
+    expect(s.pgOk).toBe(true); // one dead dependency never blanks the other
+  });
+});
+
+describe('runReadyChecks (GET /ready)', () => {
+  it('is ready when every dependency answers', async () => {
+    const r = await runReadyChecks();
+    expect(r.ready).toBe(true);
+    expect(r.checks.map((c) => c.id)).toEqual(['redis', 'postgres', 'eventLoop', 'heap']);
+  });
+
+  it('refuses traffic when a dependency is down — the 503 a load balancer needs', async () => {
+    queryRaw.mockRejectedValue(new Error('db gone'));
+    const r = await runReadyChecks();
+    expect(r.ready).toBe(false);
+    expect(r.status).toBe('down');
+    expect(r.checks.find((c) => c.id === 'postgres')!.status).toBe('down');
+  });
+
+  it('probes live rather than trusting a cached sample', async () => {
+    await takeSample(1_000_000);           // healthy history…
+    queryRaw.mockRejectedValue(new Error('db just died'));
+    const r = await runReadyChecks();      // …must not hide a dependency that died since
+    expect(r.ready).toBe(false);
+  });
+});
+
+describe('getHealthOverview', () => {
+  it('composes status, checks, history window and per-dependency detail', async () => {
+    const NOW = Date.now();
+    await takeSample(NOW - 30_000);
+    await takeSample(NOW);
+    // readPgStats issues several introspection queries; give them all a benign shape.
+    queryRaw.mockResolvedValue([] as never);
+
+    const o = await getHealthOverview(NOW);
+    expect(o.status).toBe('healthy');
+    expect(o.summary).toBe('All systems operational');
+    expect(o.ready).toBe(true);
+    expect(o.window.samples).toBe(2);
+    expect(o.strip).toHaveLength(60);
+    expect(o.strip.at(-1)).toBe('healthy');
+    expect(o.redis.p50Ms).not.toBeNull();
+    // maxmemory:0 in INFO = no limit set → null, so the UI shows no fake percentage.
+    expect(o.redis.info?.maxMemoryBytes).toBeNull();
+    expect(o.redis.hitRate).toBeCloseTo(0.9);
+    expect(o.process.heapLimitBytes).toBeGreaterThan(0);
+  });
+
+  it('an empty buffer is an honest "no history yet", not a healthy-looking zero line', async () => {
+    queryRaw.mockResolvedValue([] as never);
+    const o = await getHealthOverview();
+    expect(o.window.samples).toBe(0);
+    expect(o.sampledAt).toBeNull();
+    expect(o.strip.every((c) => c === 'none')).toBe(true);
+    expect(o.series).toEqual([]);
+    // With no sample, the probes have not answered — the page must say down/collecting, not healthy.
+    expect(o.status).toBe('down');
+  });
+
+  it('a Postgres that refuses introspection still yields a panel, with nulls for the absent facts', async () => {
+    const NOW = Date.now();
+    await takeSample(NOW);
+    queryRaw.mockRejectedValue(new Error('permission denied for pg_stat_database'));
+    const o = await getHealthOverview(NOW);
+    expect(o.postgres.stats).not.toBeNull();
+    expect(o.postgres.stats!.cacheHitRatio).toBeNull();
+    expect(o.postgres.stats!.databaseBytes).toBeNull();
+    expect(o.postgres.stats!.largestTables).toEqual([]);
+  });
+
+  it('survives Redis INFO being unavailable (a managed instance hiding it)', async () => {
+    const NOW = Date.now();
+    await takeSample(NOW);
+    redisMock.info.mockRejectedValueOnce(new Error('NOPERM'));
+    queryRaw.mockResolvedValue([] as never);
+    const o = await getHealthOverview(NOW);
+    expect(o.redis.info).toBeNull();
+    expect(o.redis.up).toBe(true); // the PING still proved it alive
+  });
+});

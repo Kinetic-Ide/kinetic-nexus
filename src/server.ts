@@ -25,6 +25,7 @@ import path               from 'path';
 import proxyRoutes        from './routes/proxy';
 import adminRoutes        from './routes/admin';
 import brandingRoutes     from './routes/branding.routes';
+import { startHealthSampler, runReadyChecks } from './services/healthSampler.service';
 import { prisma }         from './lib/prisma';
 import { redis }          from './lib/redis';
 import { deriveRateLimitKey } from './lib/rateLimitKey';
@@ -101,9 +102,9 @@ async function bootstrap() {
     timeWindow: ABUSE_RATE_LIMIT_WINDOW,
     skipOnError: true, // fail open: a Redis blip must never take the proxy down
     keyGenerator: (request) => deriveRateLimitKey(request.headers.authorization, request.ip),
-    // Health and metrics must never be throttled — orchestrators/scrapers poll them
+    // Probes and metrics must never be throttled — orchestrators/scrapers poll them
     // constantly. /metrics is exempt from the rate limit but NOT from auth (below).
-    allowList: (request) => request.url === '/health' || request.url === '/metrics',
+    allowList: (request) => request.url === '/health' || request.url === '/ready' || request.url === '/metrics',
   });
 
   await app.register(staticFiles, {
@@ -129,8 +130,22 @@ async function bootstrap() {
     return reply.code(404).send({ error: `Route ${request.method} ${pathname} not found` });
   });
 
-  // Health
+  // Probes (Phase 7.12). Two URLs on purpose, because orchestrators ask two different questions:
+  // /health = liveness — "is the process alive, should I restart it?" It deliberately checks
+  // NOTHING external: restarting the gateway cannot fix a dead database, and a liveness probe that
+  // fails on a dependency turns every database blip into a restart loop.
+  // /ready = readiness — "can this instance serve traffic?" It really probes Redis and Postgres and
+  // answers 503 when a dependency is down, with the per-check detail, so a load balancer stops
+  // routing to an instance that cannot serve. Degraded-but-answering still says ready: pulling a
+  // slow gateway out of rotation turns a slowdown into an outage.
   app.get('/health', async () => ({ ok: true, ts: new Date().toISOString() }));
+  app.get('/ready', async (_req, reply) => {
+    const r = await runReadyChecks();
+    return reply.code(r.ready ? 200 : 503).send({
+      ready: r.ready, status: r.status, ts: new Date().toISOString(),
+      checks: r.checks.map((c) => ({ id: c.id, label: c.label, measured: c.measured, threshold: c.threshold, status: c.status })),
+    });
+  });
 
   // Prometheus metrics — auth-guarded (bearer METRICS_TOKEN or ADMIN_PASSWORD),
   // exempt from the abuse guard above so a scraper is never rate-limited.
@@ -158,6 +173,11 @@ async function bootstrap() {
   const retentionTimer = setInterval(() => { void runRetention(); }, RETENTION_INTERVAL_MS);
   if (typeof firstPass.unref === 'function') firstPass.unref();
   if (typeof retentionTimer.unref === 'function') retentionTimer.unref();
+
+  // Health sampler (Phase 7.12): one small probe of Redis/Postgres/the event loop every 15s into an
+  // in-memory ring buffer — the hour of history behind the Health page's sparklines and status
+  // strip. Off the request path; its own timer is unref'd inside.
+  startHealthSampler();
 }
 
 bootstrap().catch((err) => {

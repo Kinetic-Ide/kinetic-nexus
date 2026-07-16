@@ -328,6 +328,62 @@ export interface AuditEntry {
   status: number; detail: string | null; createdAt: string;
 }
 
+// ── Health (health.routes.ts / GET /ready — healthSampler.service.ts) ─────────
+// The gateway's own vitals: live probes of Redis/Postgres/the event loop, sampled every 15s into an
+// in-memory hour of history. Every figure is measured; anything unknowable is null, never invented.
+export type HealthStatus = 'healthy' | 'degraded' | 'down';
+export type StripCell    = HealthStatus | 'none';
+
+export interface ReadyCheck {
+  id: 'redis' | 'postgres' | 'eventLoop' | 'heap';
+  label: string; measured: string; threshold: string; status: HealthStatus;
+}
+
+export interface HealthMinutePoint {
+  ts: number; redisMs: number | null; pgMs: number | null;
+  cpuPct: number; rssMb: number; loopP99Ms: number;
+}
+
+export interface RedisInfoStats {
+  version: string | null; uptimeSeconds: number | null;
+  connectedClients: number | null; blockedClients: number | null;
+  usedMemoryBytes: number | null; maxMemoryBytes: number | null; // null = no maxmemory set — no % exists
+  fragmentationRatio: number | null; opsPerSec: number | null;
+  keyspaceHits: number | null; keyspaceMisses: number | null;
+  evictedKeys: number | null; expiredKeys: number | null;
+}
+
+export interface PgHealthStats {
+  version: string | null; maxConnections: number | null;
+  connections: { total: number; active: number; idle: number } | null;
+  cacheHitRatio: number | null; commits: number | null; rollbacks: number | null;
+  deadlocks: number | null; tempBytes: number | null; databaseBytes: number | null;
+  longestTxnSeconds: number | null;
+  largestTables: { name: string; rows: number; bytes: number }[];
+}
+
+export interface HealthOverview {
+  status: HealthStatus; summary: string; checks: ReadyCheck[]; ready: boolean;
+  strip: StripCell[]; series: HealthMinutePoint[];
+  window: { minutes: number; samples: number; capacity: number };
+  sampledAt: string | null;
+  redis: {
+    up: boolean; pingMs: number | null; p50Ms: number | null; p95Ms: number | null; p99Ms: number | null;
+    info: RedisInfoStats | null; hitRate: number | null;
+  };
+  postgres: {
+    up: boolean; queryMs: number | null; p50Ms: number | null; p95Ms: number | null; p99Ms: number | null;
+    stats: PgHealthStats | null;
+  };
+  process: {
+    node: string; uptimeSeconds: number; pid: number;
+    loopP50Ms: number; loopP99Ms: number; loopMaxP99Ms: number | null;
+    cpuPct: number; rssBytes: number;
+    heapUsedBytes: number; heapLimitBytes: number;
+    containerLimitBytes: number | null;
+  };
+}
+
 // Mirrors GET /admin/config (system.routes.ts).
 export interface GatewayConfig { baseUrl: string; nexusApiKey: string | null; isFirstRun: boolean; }
 

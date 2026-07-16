@@ -55,13 +55,14 @@ milestone that makes five phases of work real; nothing after it matters as much.
 
 ---
 
-## 2. Information architecture — 11 sections (was 12; the removed section was Models)
+## 2. Information architecture — 12 sections
 
 **Models is gone** — folded into Nexus in P7.4b, where a pool now owns its own models, keys, limits
-and pricing. That was the right call and the IA reflects it.
+and pricing. **Health was added in P7.12** (Abbas's call — server/provider health and future
+benchmarks needed a home of their own; route `/status` because `/health` is the liveness probe).
 
-Overview · **Nexus** · Connect · Analytics · Teams · Enterprise · Security · Caching · Logs ·
-Settings · Admin
+Overview · **Nexus** · Connect · Analytics · Teams · Enterprise · Security · Caching · **Health** ·
+Logs · Settings · Admin
 
 ---
 
@@ -240,10 +241,42 @@ until a page reload, because each reader holds its own fetch — fixed with a `n
 every `useBranding` listens for (the same idiom the session gate already uses for `nx:unauthorized`),
 and pinned by a regression test. Dead code removed: `notificationsArmed` had no callers left.
 
-### P7.12 — Server health
-Redis (memory, clients, ops/sec, latency), Postgres (query latency, pool usage, cache-hit ratio),
-event-loop lag, active connections. Prometheus already exposes CPU/mem/event-loop-lag.
-**GPU does not apply** — Nexus is a proxy gateway, not a model-hosting box.
+### ~~P7.12 — Health section (Server health + the new Health IA home)~~ ✅ **DONE**
+**Abbas's IA call, adopted:** health metrics had no home in the 11-section IA — the phase said *what*
+but never *where*. There is now a **Health section** (12th section, after Caching) with three tabs:
+**Server** (the real P7.12), **Providers** (read-only capacity summary reusing `getNexusOverview`,
+linking to Nexus — one editor, no duplicate, same rule as Security→Network), and **Benchmarks**
+(honestly empty until built; it says what it will do rather than showing invented numbers).
+**Route is `/status`, NOT `/health`** — `GET /health` is the liveness probe, a JSON route the SPA
+fallback deliberately excludes, so a deep link to /health would render `{ok:true}` instead of the page.
+
+**The audit finding fixed:** `/health` was a hardcoded `{ok:true}` that never checked anything — a
+load balancer would call the gateway healthy with its database down. Two probes now, each answering
+the question it is actually for: `/health` stays a cheap liveness ping (restarting cannot fix a dead
+database; a liveness probe that checks dependencies turns every DB blip into a restart loop), and the
+new **`GET /ready`** really probes Redis + Postgres and answers **503** with per-check detail when a
+dependency is down. Degraded-but-answering still says ready — pulling a slow gateway out of rotation
+turns a slowdown into an outage. Both exempt from the abuse rate limit.
+
+**What makes it real, not decoration:** a new in-memory **health sampler**
+(`services/healthSampler.service.ts` over the pure `lib/health.ts`) probes Redis (PING) and Postgres
+(SELECT 1) every 15s, reads the event-loop delay histogram (`monitorEventLoopDelay`, reset per tick)
+and process CPU/RSS/heap, and keeps **one hour in a ring buffer** (240 samples, a few KB). That
+buffer feeds the latency **sparklines**, the **p50/p95/p99 chips**, and the **per-minute status
+strip** (worst sample per minute; empty minutes render as grey gaps, and a fresh process says
+"collecting — N of 240 samples" instead of faking continuity). Redis detail parses `INFO`
+(memory/maxmemory, clients, ops/sec, hit rate, evictions, fragmentation); Postgres detail reads
+`pg_stat_activity`/`pg_stat_database`/`pg_database_size`/largest tables — every query independently
+guarded so a managed instance that refuses one view nulls that fact instead of blanking the panel.
+
+**Honesty rules baked in (keep them):** no Postgres "disk free" anywhere (unknowable from SQL); no
+Redis memory % when `maxmemory` is unset (no ceiling exists — prose instead of a gauge); the
+container memory gauge reads the **cgroup limit** (v2 then v1), NEVER `os.totalmem()` (inside Docker
+that is the HOST's RAM); heap gauge is against the V8 heap limit; a failed probe is a **null** point
+that breaks the sparkline rather than drawing a reassuring zero; hit rates with no traffic are "—",
+not 100%. Every status carries its word (Healthy/Degraded/Down, Pass/Slow/Fail) — never colour alone.
+The **readiness checks table is `/ready` rendered** — measured vs threshold vs verdict — so ops and
+the dashboard share one truth. `GET /admin/health/overview` (admin-guarded) is the page's single read.
 
 ### P7.13 — Admin (multi-user) + first-run identity
 Sub-admins, role-based viewer users, invites; first-run key generation (hashed) + admin identity
@@ -260,7 +293,9 @@ The largest backend item; deliberately last, once the shell exists to present it
   would need a new owner concept), a **per-tier % split** of a team's budget (needs two caps per team
   and a per-tier spend counter), **per-team email recipients** (notification config is global today),
   and **quarterly/annual** budget windows (the counter TTLs and `periodKey` assume ≤ monthly).
-- **Benchmarks + branded PDF** — run tests on demand, clean report, downloadable.
+- **Benchmarks + branded PDF** — run tests on demand, clean report, downloadable. Its home now
+  exists: the Health → Benchmarks tab (P7.12), which states this plan and stays honestly empty
+  until the feature is real.
 - **First-class provider presets** — xAI, Azure, Bedrock, Vertex, HuggingFace, Together. They work
   **today** only via the generic `custom` OpenAI-compatible path (baseUrl + auth + modelIdPath); there
   are no presets. Purely a convenience layer.

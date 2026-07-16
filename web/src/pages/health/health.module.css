@@ -1,0 +1,135 @@
+/* Health section (P7.12) — banner, dependency cards, gauges, sparklines, status strip, checks. */
+
+/* ── Global status banner ─────────────────────────────────────────────────── */
+
+.banner {
+  display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
+  background: var(--surface-solid); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+}
+.bannerLeft { min-width: 210px; }
+.bannerState { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; }
+.bannerState.st_healthy  { color: var(--green); }
+.bannerState.st_degraded { color: var(--yellow); }
+.bannerState.st_down     { color: var(--red); }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: none;
+         box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+.bannerSub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.bannerMid { flex: 1; min-width: 250px; }
+.stripLab { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--subtle); margin-bottom: 5px; }
+.live { color: var(--green); font-weight: 600; }
+.bannerRight { display: flex; flex-direction: column; gap: 6px; }
+.probe { display: flex; gap: 10px; align-items: baseline; font-size: 11px; }
+.probeUrl { font-family: var(--font-mono); color: var(--subtle); }
+.probeVal { font-weight: 700; font-variant-numeric: tabular-nums; }
+.probeVal.st_healthy { color: var(--green); } .probeVal.st_degraded { color: var(--yellow); } .probeVal.st_down { color: var(--red); }
+
+/* ── Status strip ─────────────────────────────────────────────────────────── */
+
+.strip { display: flex; gap: 2px; }
+.cell { flex: 1; height: 16px; border-radius: 2px; min-width: 2px; }
+.cell_healthy  { background: var(--green);  opacity: .72; }
+.cell_degraded { background: var(--yellow); }
+.cell_down     { background: var(--red); }
+.cell_none     { background: var(--border); opacity: .55; }
+
+/* ── Status pill ──────────────────────────────────────────────────────────── */
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700;
+        padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-accent); }
+.pillDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill_healthy { color: var(--green); } .pill_degraded { color: var(--yellow); } .pill_down { color: var(--red); }
+
+/* ── Dependency cards ─────────────────────────────────────────────────────── */
+
+.depGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.dep { background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 13px 14px; }
+.dep.warnBorder { border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+.dep.critBorder { border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.depHead { display: flex; align-items: center; gap: 7px; }
+.depHead .pill { margin-left: auto; }
+.depIco { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; flex: none;
+          background: var(--bg-accent); border: 1px solid var(--border); color: var(--muted); }
+.depName { font-size: 12.5px; font-weight: 700; }
+.depMain { display: flex; align-items: flex-end; gap: 12px; margin-top: 12px; }
+.depBig { font-size: 27px; font-weight: 800; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.depBig.warnText { color: var(--yellow); }
+.depBig.critText { color: var(--red); }
+.depUnit { font-size: 13px; font-weight: 600; color: var(--subtle); margin-left: 2px; }
+.depLbl { display: block; font-size: 10.5px; font-weight: 500; color: var(--muted); margin-top: 5px; }
+.depFoot { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--subtle);
+           margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--border); }
+
+/* ── Sparklines / chips ───────────────────────────────────────────────────── */
+
+.spark { flex: 1; height: 34px; min-width: 60px; }
+.sparkWide { width: 100%; height: 30px; }
+.sparkOk   { stroke: var(--green); }
+.sparkWarn { stroke: var(--yellow); }
+.sparkEmpty { flex: 1; font-size: 10.5px; color: var(--subtle); text-align: right; align-self: center; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.chip { font-size: 10.5px; color: var(--muted); background: var(--bg-accent); border: 1px solid var(--border);
+        border-radius: 6px; padding: 3px 8px; font-variant-numeric: tabular-nums; }
+.chip b { color: var(--text); font-weight: 700; }
+.chip.warnChip b { color: var(--yellow); }
+
+/* ── Panels ───────────────────────────────────────────────────────────────── */
+
+.panelHead { display: flex; align-items: center; gap: 8px; }
+.panelTag { font-size: 10px; font-weight: 600; color: var(--subtle); border: 1px solid var(--border);
+            border-radius: 999px; padding: 1px 7px; }
+.panelMeta { margin-left: auto; font-size: 10.5px; font-weight: 500; color: var(--subtle); }
+
+.gaugeRow { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+.gaugeBox { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 112px; }
+.gauge { width: 84px; height: 84px; }
+.gaugeTrack { fill: none; stroke: var(--border); stroke-width: 8; }
+.gaugeFill { fill: none; stroke-width: 8; stroke-linecap: round; }
+.gaugeOk   { stroke: var(--green); }
+.gaugeWarn { stroke: var(--yellow); }
+.gaugeCrit { stroke: var(--red); }
+.gaugeVal { font-size: 15px; font-weight: 800; text-anchor: middle; fill: var(--text); font-variant-numeric: tabular-nums; }
+.gaugeSub { font-size: 8.5px; text-anchor: middle; fill: var(--subtle); text-transform: uppercase; letter-spacing: .05em; }
+.gaugeCap { font-size: 10.5px; color: var(--muted); text-align: center; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.gaugeFree { color: var(--subtle); }
+
+/* When a ceiling does not exist (Redis maxmemory unset), prose replaces the gauge. */
+.noLimit { display: flex; flex-direction: column; gap: 4px; justify-content: center; width: 112px;
+           font-size: 10.5px; color: var(--muted); line-height: 1.5; text-align: center; }
+.noLimitVal { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.kpiGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 10px 14px;
+           margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--border); }
+.kpi { display: flex; flex-direction: column; gap: 2px; }
+.kpiLbl { font-size: 9.5px; color: var(--subtle); text-transform: uppercase; letter-spacing: .05em; }
+.kpiVal { font-size: 14.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpiNote { font-size: 10px; color: var(--subtle); }
+.kpiNote.ok { color: var(--green); } .kpiNote.wn { color: var(--yellow); }
+
+/* Largest tables */
+.tblRows { margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--border); }
+.tblRow { display: grid; grid-template-columns: 1.2fr .6fr 1.4fr; gap: 10px; align-items: center;
+          font-size: 11px; padding: 4px 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tblRow.tblHead { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--subtle); }
+.tblName { font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+.tblBar { display: flex; align-items: center; gap: 7px; color: var(--text); font-weight: 600; }
+.tblBar i { display: block; height: 6px; border-radius: 3px; background: var(--green); opacity: .8; min-width: 2px; }
+
+/* Process panel */
+.procRow { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.procGrow { flex: 1; min-width: 230px; }
+.trendRow { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.trendLbl { font-size: 11px; color: var(--muted); width: 96px; flex: none; }
+.trendLbl b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Readiness checks */
+.check { display: grid; grid-template-columns: 1.4fr .8fr .8fr .7fr; gap: 10px; align-items: center;
+         font-size: 12px; padding: 8px 2px; border-top: 1px solid var(--border); }
+.check.checkHead { border-top: 0; font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
+                   color: var(--subtle); padding-bottom: 4px; }
+.mono { font-family: var(--font-mono); font-size: 11px; }
+
+/* Collecting note (fresh process — the honest partial-history state) */
+.collecting { display: flex; gap: 8px; align-items: flex-start; margin-top: 2px; font-size: 11px;
+              color: var(--muted); line-height: 1.5; }

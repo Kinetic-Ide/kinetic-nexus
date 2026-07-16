@@ -12,6 +12,7 @@ import { Analytics } from './pages/Analytics';
 import { Teams } from './pages/Teams';
 import { Security } from './pages/Security';
 import { Caching } from './pages/Caching';
+import { Health } from './pages/Health';
 import { Settings } from './pages/Settings';
 import { Logs } from './pages/Logs';
 import { Placeholder } from './pages/Placeholder';
@@ -26,6 +27,7 @@ const PAGES: Record<string, FunctionComponent> = {
   teams:     Teams,
   security:  Security,
   caching:   Caching,
+  health:    Health,
   settings:  Settings,
   logs:      Logs,
 };
