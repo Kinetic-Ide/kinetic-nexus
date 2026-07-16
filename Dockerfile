@@ -10,6 +10,10 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npx prisma generate && npm run build
+# Build the redesigned dashboard (Phase 7.9 cutover). It is a separate npm package under web/; its
+# static output (web/dist) is what the runtime image serves. Built here so the runtime stage carries
+# only the compiled assets, never the dashboard's dev toolchain.
+RUN cd web && npm ci && npm run build
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -33,11 +37,11 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
-# The admin dashboard is static and was never copied into the runtime stage, so
-# published images served the API but returned 404 for `/`. @fastify/static only
-# logs a warning for a missing root, so the container started clean and the gap was
-# invisible. Keep this in step with the static root in src/server.ts.
-COPY frontend ./frontend
+# The dashboard's static build. The gateway serves it from web/dist (see the static root in
+# src/server.ts); only the built assets ship, not web/'s source or toolchain. @fastify/static only
+# logs a warning for a missing root, so keep this COPY in step with that static root — if they drift,
+# the container starts clean but returns 404 for the dashboard.
+COPY --from=builder /app/web/dist ./web/dist
 
 # Drop root: run as the image's built-in unprivileged `node` user.
 RUN chown -R node:node /app

@@ -1,6 +1,10 @@
 # Dependencies and build output are (re)created inside the image.
 node_modules
 dist
+# The dashboard package under web/ is installed and built inside the image (builder stage), so its
+# local deps and build output must never come from the host context.
+web/node_modules
+web/dist
 
 # Git, CI, and editor cruft.
 .git

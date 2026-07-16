@@ -34,6 +34,7 @@ import { drainAudit, runRetention } from './services/audit.service';
 import { metricsText, metricsContentType } from './lib/metrics';
 import { verifyMetricsToken } from './middleware/auth.middleware';
 import { assertDependencies, StartupCheckError } from './services/preflight.service';
+import { isSpaNavigation } from './lib/spaFallback';
 import { randomUUID }     from 'crypto';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -105,11 +106,26 @@ async function bootstrap() {
   });
 
   await app.register(staticFiles, {
-    // The dashboard. `__dirname` is `dist/` after a build, so this resolves to the
-    // repo root's `frontend/` in dev and `/app/frontend` in the container — which is
-    // why the Dockerfile must copy it into the runtime stage.
-    root:   path.join(__dirname, '..', 'frontend'),
-    prefix: '/',
+    // The redesigned dashboard's static build (Phase 7.9 cutover). `__dirname` is `dist/` after a
+    // build, so this resolves to the repo root's `web/dist` in dev and `/app/web/dist` in the
+    // container — which is why the Dockerfile must build web/ and copy web/dist into the runtime
+    // stage. `wildcard: false` registers a route per built file (plus index.html at `/`) and lets
+    // every unmatched path fall through to the not-found handler below, where the SPA fallback lives.
+    root:     path.join(__dirname, '..', 'web', 'dist'),
+    prefix:   '/',
+    wildcard: false,
+  });
+
+  // SPA deep-link fallback: a browser navigation to a client-side route (/teams, /nexus, /admin …)
+  // matches no file and no API route, so it lands here. We hand back index.html and let the client
+  // router resolve it; a non-browser request (an API client, or the gateway's own namespaces) keeps
+  // the honest JSON 404. See lib/spaFallback.ts for why the Accept header, not a route list, decides.
+  app.setNotFoundHandler((request, reply) => {
+    const pathname = request.url.split('?')[0];
+    if (isSpaNavigation(request.method, request.headers.accept, pathname)) {
+      return reply.sendFile('index.html');
+    }
+    return reply.code(404).send({ error: `Route ${request.method} ${pathname} not found` });
   });
 
   // Health

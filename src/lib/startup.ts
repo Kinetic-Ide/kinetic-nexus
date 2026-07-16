@@ -82,8 +82,8 @@ export function formatStartupFailure(dep: Dependency, url: string | undefined, e
     '',
     ...hint.map((l) => (l ? `   ${l}` : '')),
     '',
-    '   To preview the dashboard without any services, serve it on its own:',
-    '       npx serve frontend',
+    '   To preview the dashboard without any services, run its dev server on its own:',
+    '       npm --prefix web run dev',
     '',
   ].join('\n');
 }

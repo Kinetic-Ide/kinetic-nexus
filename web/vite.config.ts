@@ -2,10 +2,12 @@ import { defineConfig } from 'vitest/config';
 import preact from '@preact/preset-vite';
 
 // The dashboard builds to static assets the gateway serves as-is (no SSR), so the single
-// self-hostable container is unchanged. `base: './'` keeps asset URLs relative, so it works
-// whether mounted at the site root or a sub-path.
+// self-hostable container is unchanged. `base: '/'` makes asset URLs absolute (/assets/…): the gateway
+// always mounts the dashboard at the site root, and a deep-link refresh (/teams, /nexus …) is answered
+// with index.html by the SPA fallback, so assets must resolve from the root regardless of the route
+// depth the browser happens to have loaded first — a relative base would break them there.
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [preact()],
   // Dev only: the built app is served by the gateway itself, so /admin is same-origin in
   // production. During `vite dev` it runs on its own port, so proxy the admin API to the local

@@ -142,10 +142,17 @@ outage when that tier is momentarily exhausted. Unit-tested at the ordering laye
 Members + Org are deliberately deferred to P7.13 (they need the same accounts primitive as sub-admins;
 build it once).
 
-### P7.9 — **CUTOVER** 🚩 *the milestone*
-Serve `web/dist` instead of `frontend/`; build the dashboard in the Docker image and CI; verify static
-serving byte-for-byte; retire `frontend/`. **This is the phase that makes P7.1–P7.8 real.** Small in
-code, largest in consequence.
+### ~~P7.9 — CUTOVER~~ ✅ **DONE** 🚩 *the milestone — the redesign now reaches users*
+The gateway serves the redesigned dashboard (`web/dist`) instead of the old `frontend/`, which is
+deleted. New this phase: a **SPA deep-link fallback** (`lib/spaFallback.ts` + a `setNotFoundHandler`
+in `server.ts`) so a refresh or bookmark on a client-side route (`/teams`, `/nexus`, `/admin` …)
+serves `index.html` and lets the client router resolve it — while API clients still get an honest
+JSON 404. The discriminator is the `Accept` header, not a route list, so it never rots as sections are
+added. Static plugin now `wildcard: false`; Vite `base` switched `'./'`→`'/'` so assets resolve from
+the root at any route depth. Docker builds `web/` in the build stage and copies only `web/dist` into
+the runtime image. Verified: an `inject` integration test drives the real wiring (deep link → app,
+API path → JSON 404), and the built deep link serves 200 + absolute assets. **This is the phase that
+makes P7.1–P7.8 real.** Small in code, largest in consequence.
 
 ### P7.10 — Budgeting cascade *(depends on P7.8 — a budget cannot cascade to teams that have no UI)*
 Org-total budget → pools → teams, each team knowing its limit; route X% of a team's budget to premium

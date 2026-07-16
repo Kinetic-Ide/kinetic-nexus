@@ -7,6 +7,45 @@
 
 ---
 
+## 2026-07-16 (Session 55)
+
+---
+
+**Date:** 2026-07-16 · Session 55  
+**Title:** Switching the product over to the new dashboard  
+
+**Summary:**  
+For several sessions the gateway has quietly carried two dashboards at once: the original one, which is
+what users actually saw, and the redesigned one, which was being built up alongside it without
+disturbing anything in use. With the Teams work in the previous session the new dashboard finally does
+everything the old one did, so this session flips the switch — the gateway now serves the new
+dashboard, and the old one has been removed.
+
+**The one new capability this needed.** The original dashboard was a single page, so the gateway only
+ever had to serve one web address. The new dashboard has real, shareable addresses for each section —
+Teams, Nexus, Caching, and so on. So the gateway had to learn to hand the dashboard back for any of
+those addresses, which is what makes refreshing the page or opening a bookmark work instead of showing
+an error. A genuine web request from a browser now receives the dashboard; a behind-the-scenes data
+request that doesn't match anything still gets a normal "not found" reply, exactly as before. The
+gateway decides between the two by looking at what the request is actually asking for, so it will keep
+working automatically as new sections are added.
+
+**Everything else is packaging.** The build recipe for the product's container now assembles the new
+dashboard and includes it in the finished image, and the retired dashboard and its leftover
+configuration have been cleared out so nothing stale is shipped or maintained.
+
+**Why this one is a milestone.** It is a small change in the code but a large one in effect: it is the
+moment all of the redesign work from the past weeks actually reaches the people running the product.
+Until now every improvement was real but invisible; from this release the new experience is the one
+users get.
+
+The change was verified end to end — the dashboard is served correctly for a direct visit to any of
+its sections, and ordinary data requests still behave as they should. The complete automated gate —
+code style, type safety, tests, production build, and a dependency security scan — passes cleanly on
+both the gateway and the dashboard, with no known vulnerabilities.
+
+---
+
 ## 2026-07-16 (Session 54)
 
 ---
