@@ -3,6 +3,7 @@ import { POST, DEL, type NexusKeyHealth } from '../../api';
 import { Badge, Button } from '../../ui';
 import { EditKeyDialog } from './EditKeyDialog';
 import { relativeTime } from '../../lib/format';
+import { canWrite } from '../../lib/access';
 import s from '../pages.module.css';
 
 // One provider key: its masked value, owner (shared vs a BYOK team), live health, and the
@@ -56,14 +57,16 @@ export function KeyRow({ k, onChanged }: { k: NexusKeyHealth; onChanged: () => v
         <span class={s.keySub}>{k.rpmLimit}/min · {k.tpmLimit.toLocaleString()} tpm · {k.maxUsers.toLocaleString()} users{k.lastUsedAt ? ` · used ${relativeTime(k.lastUsedAt)}` : ''}</span>
         {probe && <span class={s.keyProbe}>{probe}</span>}
       </div>
-      <div class={s.keyActions}>
-        <Button size="sm" variant="ghost" onClick={() => run('test')} disabled={busy !== null}>Test</Button>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={busy !== null}>Edit</Button>
-        {!h.banned && !h.cooling && <Button size="sm" variant="ghost" onClick={() => run('cool')} disabled={busy !== null}>Cool</Button>}
-        {(h.banned || h.cooling) && <Button size="sm" variant="ghost" onClick={() => run('unban')} disabled={busy !== null}>Restore</Button>}
-        {!h.banned && <Button size="sm" variant="ghost" onClick={() => run('ban')} disabled={busy !== null}>Ban</Button>}
-        <Button size="sm" variant="danger" onClick={() => run('delete')} disabled={busy !== null}>Delete</Button>
-      </div>
+      {canWrite() && (
+        <div class={s.keyActions}>
+          <Button size="sm" variant="ghost" onClick={() => run('test')} disabled={busy !== null}>Test</Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={busy !== null}>Edit</Button>
+          {!h.banned && !h.cooling && <Button size="sm" variant="ghost" onClick={() => run('cool')} disabled={busy !== null}>Cool</Button>}
+          {(h.banned || h.cooling) && <Button size="sm" variant="ghost" onClick={() => run('unban')} disabled={busy !== null}>Restore</Button>}
+          {!h.banned && <Button size="sm" variant="ghost" onClick={() => run('ban')} disabled={busy !== null}>Ban</Button>}
+          <Button size="sm" variant="danger" onClick={() => run('delete')} disabled={busy !== null}>Delete</Button>
+        </div>
+      )}
 
       {editing && <EditKeyDialog k={k} onClose={() => setEditing(false)} onSaved={onChanged} />}
     </div>

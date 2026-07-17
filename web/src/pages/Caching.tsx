@@ -51,7 +51,7 @@ export function Caching() {
           </div>
 
           <div class={`${s.grid} ${s.cols2} ${s.section}`}>
-            <CacheControl />
+            <CacheControl onSaved={reload} />
             <PurgeCard entries={data.entries} onPurged={reload} />
           </div>
 

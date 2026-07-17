@@ -10,6 +10,27 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 ## [Unreleased]
 
 ### Added
+- **Sessions, role-gated UI, and the factory reset (Phase 7.13b).** Every sign-in is now a
+  session a person can see and end: **Admin → My account → "Where you're signed in"** lists each
+  live session with the browser it claimed ("Chrome on Windows"), its IP, when it signed in and
+  when it was last active — with per-row sign-out and a "Sign out everywhere else" button. Revocation
+  takes effect on the session's very next request; suspending or removing a person now erases their
+  sessions rather than merely refusing them. Sessions are indexed per-user in Redis — no schema
+  migration. The dashboard's **Sign out** button now also revokes the session server-side instead of
+  only forgetting the token. **Role gating everywhere:** viewers are shown no write controls at all,
+  and admins are not shown owner-only ones (people management, admin API tokens, master-key rotation,
+  network policy, compliance) — presentation only, the server guards were already there. Revealing a
+  team access key's plaintext is now write-guarded on the server too: a copyable credential is not
+  "read-only". **Factory reset (Admin → Danger zone,** owner-only): three proofs — an owner session,
+  the `ADMIN_PASSWORD` from the server's environment, and the typed phrase `RESET THIS GATEWAY` —
+  erase every table (discovered from the live schema, so a model added later cannot be silently
+  spared) and every Redis key, returning the gateway to its unclaimed first-run state. The reset
+  cannot appear in the audit trail — it empties that table — so it logs to the server console and
+  the screen says so. **Topbar honesty:** the account chip names the signed-in person and their
+  role, and the LIVE pill polls `GET /health` every 30 s — grey OFFLINE when a poll fails, instead
+  of the hardcoded green word it had been since the shell was built. Fixed: saving the cache toggle
+  now refreshes the Caching page's on/off badge without a reload. 16 new end-to-end specs cover
+  sessions, gating, and the reset at the wire and in a real browser.
 - **Audit trail & compliance logging for the admin panel (Phase 6.7).** Every state-changing
   admin action is now recorded to an append-only log — who (the Phase 6.5 role), what (a stable
   action slug), on what target, from which IP, at what time, with what result — captured by a

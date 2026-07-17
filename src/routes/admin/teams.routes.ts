@@ -139,7 +139,10 @@ export default async function adminTeamsRoutes(fastify: FastifyInstance) {
     return reply.send({ key: { id: key.id, name: key.name, teamId: key.teamId } });
   });
 
-  fastify.get('/admin/team-keys/:id/reveal', adminGuard, async (request, reply) => {
+  // Write-guarded although it is a GET (7.13b): this hands back a LIVE credential in plaintext.
+  // A viewer who can copy a working access key is not read-only in any sense that matters — the
+  // key spends money and counts against a team's budget the moment it is used.
+  fastify.get('/admin/team-keys/:id/reveal', adminWriteGuard, async (request, reply) => {
     const { id } = request.params as { id: string };
     const tk = await prisma.nexusTeamKey.findUnique({ where: { id } });
     if (!tk) return reply.code(404).send({ error: 'Not found' });

@@ -108,4 +108,17 @@ describe('Security — API tokens', () => {
 
     await waitFor(() => expect(del).toHaveBeenCalledWith('/admin/tokens/t1'));
   });
+
+  it('offers an ADMIN no mint or revoke — tokens are owner ground (7.13b)', async () => {
+    // Minting an owner token is handing out owner authority, so even an admin only looks.
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'admin', userId: 'u2', name: 'Ada' }));
+    route({ tokens: { tokens: [{ id: 't1', name: 'ci', maskedKey: 'nxa_1234••••abcd', role: 'owner', lastUsedAt: null, createdAt: new Date().toISOString() }] } });
+    render(<Security />);
+    openTokens();
+    await waitFor(() => expect(screen.getByText('ci')).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /create token/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /revoke ci/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/only an owner can create or revoke/i)).toBeInTheDocument();
+  });
 });

@@ -4,6 +4,7 @@ import { POST, PATCH, DEL, ApiError, type TeamRow, type TeamDraft, type TeamTier
 import { Card, Button, Badge, Spinner, StatCard, Table, Field, Input, Select, FieldRow, Toggle, FormError, Modal, type Column } from '../../ui';
 import { useApi } from '../../hooks/useApi';
 import { currency } from '../../lib/format';
+import { canWrite } from '../../lib/access';
 import s from '../pages.module.css';
 
 // The teams themselves: create, edit budget/tier/status, delete. The preferred tier is a real routing
@@ -91,11 +92,14 @@ export function TeamsList() {
     { key: 'budget', label: 'Spend / budget', render: budgetCell },
     { key: 'keyCount', label: 'Keys', align: 'right', render: (t) => <span class={s.tokenWhen}>{t.keyCount}</span> },
     { key: 'status', label: 'Status', render: (t) => <Badge tone={t.status === 'active' ? 'green' : 'yellow'}>{t.status}</Badge> },
-    { key: 'actions', label: '', align: 'right', render: (t) => (
-      <span class={s.rowActions}>
-        <Button size="sm" variant="ghost" onClick={() => openEdit(t)} aria-label={`Edit ${t.name}`}><Pencil size={13} /></Button>
-        <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setDeleting(t); }} aria-label={`Delete ${t.name}`}><Trash2 size={13} /></Button>
-      </span>
+    { key: 'actions', label: '', align: 'right', render: (t) => (canWrite()
+      ? (
+        <span class={s.rowActions}>
+          <Button size="sm" variant="ghost" onClick={() => openEdit(t)} aria-label={`Edit ${t.name}`}><Pencil size={13} /></Button>
+          <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setDeleting(t); }} aria-label={`Delete ${t.name}`}><Trash2 size={13} /></Button>
+        </span>
+      )
+      : null
     ) },
   ];
 
@@ -110,7 +114,7 @@ export function TeamsList() {
       <Card class={s.section}>
         <div class={s.listHead}>
           <span class={s.listHeadTitle}>Teams</span>
-          <Button variant="primary" size="sm" onClick={openCreate}><Plus size={13} /> New team</Button>
+          {canWrite() && <Button variant="primary" size="sm" onClick={openCreate}><Plus size={13} /> New team</Button>}
         </div>
         {loading && !data && <div class={s.centered}><Spinner /> <span>Loading teams…</span></div>}
         {error && !data && (

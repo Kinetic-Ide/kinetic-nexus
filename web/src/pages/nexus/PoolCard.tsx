@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Plus, Pencil, Trash2 } from 'lucide-preact';
 import { Card, Badge, Button, EmptyState } from '../../ui';
 import { DEL, type NexusPool, type AiModel } from '../../api';
+import { canWrite } from '../../lib/access';
 import { KeyRow } from './KeyRow';
 import { PoolModels } from './PoolModels';
 import { AddKeyDialog } from './AddKeyDialog';
@@ -35,9 +36,13 @@ export function PoolCard({ pool, models, onChanged }: { pool: NexusPool; models:
         </div>
         <div class={s.poolHeadActions}>
           <span class={s.poolCount}>{pool.keys.length} key{pool.keys.length === 1 ? '' : 's'}</span>
-          <Button size="sm" variant="ghost" onClick={() => setAddingKey(true)}><Plus size={14} /> Key</Button>
-          <Button size="sm" variant="ghost" icon onClick={() => setEditing(true)} aria-label="Edit pool"><Pencil size={14} /></Button>
-          <Button size="sm" variant="ghost" icon onClick={removePool} disabled={removing} aria-label="Remove pool"><Trash2 size={14} /></Button>
+          {canWrite() && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setAddingKey(true)}><Plus size={14} /> Key</Button>
+              <Button size="sm" variant="ghost" icon onClick={() => setEditing(true)} aria-label="Edit pool"><Pencil size={14} /></Button>
+              <Button size="sm" variant="ghost" icon onClick={removePool} disabled={removing} aria-label="Remove pool"><Trash2 size={14} /></Button>
+            </>
+          )}
         </div>
       </div>
 

@@ -14,7 +14,11 @@ export default defineConfig({
   // gateway (PORT 3000). Never used in the static build.
   server: {
     proxy: {
-      '/admin': { target: 'http://localhost:3000', changeOrigin: true },
+      '/admin':  { target: 'http://localhost:3000', changeOrigin: true },
+      // The LIVE pill polls /health (7.13b). Without this entry vite's SPA fallback answers the
+      // probe itself with index.html and a 200, and the pill would glow green in dev with no
+      // gateway running at all.
+      '/health': { target: 'http://localhost:3000', changeOrigin: true },
     },
   },
   build: {

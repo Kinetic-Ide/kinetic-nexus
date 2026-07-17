@@ -128,3 +128,20 @@ describe('Admin — People', () => {
     expect(screen.getByText('Expired')).toBeInTheDocument();
   });
 });
+
+describe('Admin — Danger zone tab', () => {
+  it('is offered to an owner, and opens the factory reset', async () => {
+    render(<Admin />);
+    fireEvent.click(screen.getByRole('tab', { name: /danger zone/i }));
+    await waitFor(() => expect(screen.getByText(/factory reset/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /erase everything/i })).toBeInTheDocument();
+  });
+
+  it('does not exist for an admin', () => {
+    // Hiding the tab is presentation, not the boundary — the server demands an owner session
+    // AND the master password — but a tab that could only ever answer 403 is a trap, not a feature.
+    asRole('admin', 'u3');
+    render(<Admin />);
+    expect(screen.queryByRole('tab', { name: /danger zone/i })).not.toBeInTheDocument();
+  });
+});

@@ -93,7 +93,7 @@ function SsrfForm({ data, ctx }: { data: SsrfConfig; ctx: SaveCtx<SsrfConfig> })
         </>
       )}
 
-      <SaveBar ctx={ctx} dirty={dirty} onSave={() => ctx.save({ allowPrivate, allowList: list })} />
+      <SaveBar ctx={ctx} dirty={dirty} requires="owner" onSave={() => ctx.save({ allowPrivate, allowList: list })} />
     </>
   );
 }

@@ -3,6 +3,7 @@ import { Boxes, KeyRound, Snowflake, Ban, Plus } from 'lucide-preact';
 import { PageHeader, StatCard, Spinner, Button, EmptyState } from '../ui';
 import { useApi } from '../hooks/useApi';
 import { compactNumber } from '../lib/format';
+import { canWrite } from '../lib/access';
 import type { NexusOverview, ModelsResponse, AiModel } from '../api';
 import { RoutingRules } from './nexus/RoutingRules';
 import { PoolCard } from './nexus/PoolCard';
@@ -52,7 +53,7 @@ export function Nexus() {
       <PageHeader
         title="Nexus"
         subtitle="Provider pools & routing"
-        actions={<Button variant="primary" size="sm" onClick={() => setAdding(true)}><Plus size={15} /> Add provider</Button>}
+        actions={canWrite() && <Button variant="primary" size="sm" onClick={() => setAdding(true)}><Plus size={15} /> Add provider</Button>}
       />
 
       <div class={`${s.grid} ${s.cols4}`}>
@@ -67,7 +68,7 @@ export function Nexus() {
       {tiers.length === 0 ? (
         <div class={s.section}>
           <EmptyState icon={<Boxes size={22} />}>No provider pools yet. Add one to start routing.</EmptyState>
-          <div class={s.emptyCta}><Button variant="primary" size="sm" onClick={() => setAdding(true)}><Plus size={15} /> Add provider</Button></div>
+          {canWrite() && <div class={s.emptyCta}><Button variant="primary" size="sm" onClick={() => setAdding(true)}><Plus size={15} /> Add provider</Button></div>}
         </div>
       ) : (
         tiers.map((group) => (

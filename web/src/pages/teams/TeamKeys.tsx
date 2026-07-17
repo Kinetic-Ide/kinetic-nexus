@@ -4,6 +4,7 @@ import { GET, POST, PATCH, DEL, ApiError, type TeamKeyRow, type TeamRow } from '
 import { Card, Button, Badge, Spinner, Table, Field, Input, Select, CopyField, FormError, Modal, type Column } from '../../ui';
 import { useApi } from '../../hooks/useApi';
 import { relativeTime } from '../../lib/format';
+import { canWrite } from '../../lib/access';
 import s from '../pages.module.css';
 
 // Scoped access keys — what a team's members actually present to the gateway. Each key may be assigned
@@ -82,41 +83,56 @@ export function TeamKeys() {
     { key: 'maskedKey', label: 'Key', render: (k) => <code class={s.tokenMask}>{k.maskedKey}</code> },
     { key: 'team', label: 'Team', render: (k) => k.team ? <Badge tone="blue">{k.team.name}</Badge> : <span class={s.tokenWhen}>Unassigned</span> },
     { key: 'createdAt', label: 'Created', align: 'right', render: (k) => <span class={s.tokenWhen} title={k.createdAt}>{relativeTime(k.createdAt)}</span> },
-    { key: 'actions', label: '', align: 'right', render: (k) => (
-      <span class={s.rowActions}>
-        <Button size="sm" variant="ghost" onClick={() => copyKey(k)} aria-label={`Copy ${k.name}`}><Copy size={13} /></Button>
-        <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setReTo(k.team?.id ?? ''); setReassign(k); }} aria-label={`Reassign ${k.name}`}><Shuffle size={13} /></Button>
-        <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setRevoking(k); }} aria-label={`Revoke ${k.name}`}><Trash2 size={13} /></Button>
-      </span>
+    // Copy is gated with the rest: it reveals the LIVE key, which the server refuses to a viewer
+    // (a copyable credential is not "read-only" in any sense that matters).
+    { key: 'actions', label: '', align: 'right', render: (k) => (canWrite()
+      ? (
+        <span class={s.rowActions}>
+          <Button size="sm" variant="ghost" onClick={() => copyKey(k)} aria-label={`Copy ${k.name}`}><Copy size={13} /></Button>
+          <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setReTo(k.team?.id ?? ''); setReassign(k); }} aria-label={`Reassign ${k.name}`}><Shuffle size={13} /></Button>
+          <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setRevoking(k); }} aria-label={`Revoke ${k.name}`}><Trash2 size={13} /></Button>
+        </span>
+      )
+      : null
     ) },
   ];
 
   return (
     <>
-      <Card heading="Create an access key">
-        <p class={s.setDesc}>
-          The credential a team member sends as <code>Authorization: Bearer …</code>. Assign it to a team
-          to count its usage against that team’s budget and routing tier. The key is shown once — copy it now.
-        </p>
-        {formError && <FormError>{formError}</FormError>}
-        <div class={s.keyCreateRow}>
-          <Input value={name} placeholder="e.g. Abbas, CI pipeline" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-          <Select value={teamId} onChange={(e) => setTeamId((e.target as HTMLSelectElement).value)} aria-label="Team">
-            <option value="">Unassigned</option>
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </Select>
-          <Button variant="primary" size="sm" onClick={create} disabled={!name.trim() || creating}>
-            <KeyRound size={13} /> {creating ? 'Creating…' : 'Create key'}
-          </Button>
-        </div>
-
-        {fresh && (
-          <div class={s.tokenFresh}>
-            <p class={s.tokenFreshWarn}><b>Copy “{fresh.name}” now.</b> This is the only time the full key is shown here.</p>
-            <CopyField value={fresh.key} />
+      {canWrite() ? (
+        <Card heading="Create an access key">
+          <p class={s.setDesc}>
+            The credential a team member sends as <code>Authorization: Bearer …</code>. Assign it to a team
+            to count its usage against that team’s budget and routing tier. The key is shown once — copy it now.
+          </p>
+          {formError && <FormError>{formError}</FormError>}
+          <div class={s.keyCreateRow}>
+            <Input value={name} placeholder="e.g. Abbas, CI pipeline" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+            <Select value={teamId} onChange={(e) => setTeamId((e.target as HTMLSelectElement).value)} aria-label="Team">
+              <option value="">Unassigned</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+            <Button variant="primary" size="sm" onClick={create} disabled={!name.trim() || creating}>
+              <KeyRound size={13} /> {creating ? 'Creating…' : 'Create key'}
+            </Button>
           </div>
-        )}
-      </Card>
+
+          {fresh && (
+            <div class={s.tokenFresh}>
+              <p class={s.tokenFreshWarn}><b>Copy “{fresh.name}” now.</b> This is the only time the full key is shown here.</p>
+              <CopyField value={fresh.key} />
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card heading="Access keys">
+          <p class={s.setDesc}>
+            The credentials team members send as <code>Authorization: Bearer …</code>. You can see
+            what exists below; creating, copying, or revoking a key needs write access — a key in
+            hand spends money, which is more than reading.
+          </p>
+        </Card>
+      )}
 
       <Card heading="Access keys" class={s.section}>
         {loading && !data && <div class={s.centered}><Spinner /> <span>Loading keys…</span></div>}

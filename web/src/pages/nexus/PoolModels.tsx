@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Pencil, X } from 'lucide-preact';
 import { removeModelFromRegistry } from '../../lib/registry';
+import { canWrite } from '../../lib/access';
 import type { AiModel } from '../../api';
 import { EditModelDialog } from './EditModelDialog';
 import s from '../pages.module.css';
@@ -43,10 +44,12 @@ export function PoolModels({ models, onChanged }: { models: AiModel[]; onChanged
                   <span class={s.modelItemName}>{m.modelString}</span>
                   <span class={s.modelItemMeta}>{m.capabilities.join(' · ')} · {priceSummary(m)}</span>
                 </div>
-                <div class={s.modelItemActions}>
-                  <button type="button" class={s.modelItemBtn} onClick={() => setEditing(m)} disabled={busy !== null} aria-label={`Edit ${m.modelString}`}><Pencil size={12} /></button>
-                  <button type="button" class={s.modelItemBtn} onClick={() => remove(m.id)} disabled={busy !== null} aria-label={`Remove ${m.modelString}`}><X size={13} /></button>
-                </div>
+                {canWrite() && (
+                  <div class={s.modelItemActions}>
+                    <button type="button" class={s.modelItemBtn} onClick={() => setEditing(m)} disabled={busy !== null} aria-label={`Edit ${m.modelString}`}><Pencil size={12} /></button>
+                    <button type="button" class={s.modelItemBtn} onClick={() => remove(m.id)} disabled={busy !== null} aria-label={`Remove ${m.modelString}`}><X size={13} /></button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

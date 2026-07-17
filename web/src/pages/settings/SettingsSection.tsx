@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 import { Card, Button, Spinner, FormError } from '../../ui';
 import { useApi } from '../../hooks/useApi';
 import { useSave } from '../../hooks/useSave';
+import { canWrite, isOwner } from '../../lib/access';
 import s from '../pages.module.css';
 
 // Every settings panel is the same shape: load a config, edit it, save it, and be told plainly
@@ -80,8 +81,28 @@ export function SettingsSection<T>({ path, title, description, children }: Props
   );
 }
 
-/** The footer every panel ends with: the save action, and an honest word about what just happened. */
-export function SaveBar({ ctx, onSave, dirty }: { ctx: SaveCtx<unknown>; onSave: () => void; dirty: boolean }) {
+/**
+ * The footer every panel ends with: the save action, and an honest word about what just happened.
+ *
+ * `requires` mirrors the guard on the panel's PUT route — 'admin' (adminWriteGuard, the default)
+ * or 'owner' (adminOwnerGuard: network policy, compliance). A role below the requirement gets a
+ * sentence instead of a button: the server would refuse anyway, and a control that can only fail
+ * is a trap, not a feature. The fields above stay visible — reading the configuration is every
+ * role's right; changing it is not.
+ */
+export function SaveBar({ ctx, onSave, dirty, requires = 'admin' }: {
+  ctx: SaveCtx<unknown>; onSave: () => void; dirty: boolean; requires?: 'admin' | 'owner';
+}) {
+  const allowed = requires === 'owner' ? isOwner() : canWrite();
+  if (!allowed) {
+    return (
+      <div class={s.setSave}>
+        <span class={s.setDirty}>
+          {requires === 'owner' ? 'Only an owner can change these settings.' : 'You have read-only access.'}
+        </span>
+      </div>
+    );
+  }
   return (
     <div class={s.setSave}>
       <Button variant="primary" size="sm" onClick={onSave} disabled={ctx.saving || !dirty}>

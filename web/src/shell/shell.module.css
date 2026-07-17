@@ -38,6 +38,10 @@
 .livePill .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 var(--green); animation: pulse 2s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--green-bg); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 
+/* The pill's failure face (7.13b): grey and still — an outage does not pulse. */
+.offlinePill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--muted); background: var(--surface-2); padding: 4px 10px; border-radius: 20px; }
+.offlinePill .deadDot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+
 .iconChip { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); cursor: pointer; position: relative; transition: color .13s, border-color .13s; }
 .iconChip:hover { color: var(--text); border-color: var(--border-strong); }
 .bellCount { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
@@ -45,6 +49,9 @@
 .account { display: flex; align-items: center; gap: 9px; }
 .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .accountName { font-size: 13px; font-weight: 600; }
+
+/* Who the gateway believes you are, at a glance (7.13b). */
+.roleChip { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); padding: 2px 7px; border-radius: 10px; }
 
 .content { flex: 1; overflow-y: auto; padding: 26px 30px; }
 .contentInner { max-width: 1180px; margin: 0 auto; }

@@ -14,10 +14,21 @@
 .headTitle { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .headSub   { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
-/* A person's name over their email — two facts in the width of one column. */
-.person { display: flex; flex-direction: column; gap: 1px; }
+/* A person's name over their email — two facts in the width of one column. The email may be
+   long and the table's cells don't wrap, so it truncates with its full value on hover. */
+.person { display: flex; flex-direction: column; gap: 1px; max-width: 220px; }
 .personName { color: var(--text); font-weight: 550; }
-.personEmail { font-size: 11.5px; color: var(--muted); }
+.personEmail { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+
+/* The role dropdown sized as a control in a row, not a form field (7.13b): the shared .input
+   style is full-width with field padding, which inside a table cell blew the column open.
+   Element+class so it outweighs .input regardless of stylesheet order. */
+select.roleSelect {
+  width: auto;
+  min-width: 92px;
+  padding: 4px 24px 4px 8px;
+  font-size: 12px;
+}
 
 /* "You", so nobody has to work out which row is their own before changing a role. */
 .you {
@@ -69,6 +80,13 @@
 .onceNote { font-size: 11.5px; color: var(--muted); line-height: 1.55; margin: 0; }
 
 .forms { display: flex; flex-direction: column; gap: 14px; max-width: 460px; }
+
+/* The factory-reset card's warning marker — the one place red leads a title. */
+.dangerIcon {
+  color: var(--red);
+  vertical-align: -2px;
+  margin-right: 5px;
+}
 
 .roleHelp {
   display: flex;

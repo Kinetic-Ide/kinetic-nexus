@@ -3,6 +3,7 @@ import { Upload, Trash2 } from 'lucide-preact';
 import { PUT, ApiError, type Branding } from '../../api';
 import { Card, Button, Field, Input, FormError, Spinner } from '../../ui';
 import { useApi } from '../../hooks/useApi';
+import { canWrite } from '../../lib/access';
 import { announceBrandingChange } from '../../hooks/useBranding';
 import s from '../pages.module.css';
 import b from './branding.module.css';
@@ -113,10 +114,16 @@ function BrandingForm({ data, onSaved }: { data: Branding; onSaved: () => void }
       </p>
 
       <div class={s.setSave}>
-        <Button variant="primary" size="sm" onClick={save} disabled={!dirty || busy}>
-          {busy ? 'Saving…' : 'Save branding'}
-        </Button>
-        {saved && !dirty && <span class={s.setSaved}>Saved</span>}
+        {canWrite() ? (
+          <>
+            <Button variant="primary" size="sm" onClick={save} disabled={!dirty || busy}>
+              {busy ? 'Saving…' : 'Save branding'}
+            </Button>
+            {saved && !dirty && <span class={s.setSaved}>Saved</span>}
+          </>
+        ) : (
+          <span class={s.setDirty}>You have read-only access.</span>
+        )}
       </div>
     </Card>
   );

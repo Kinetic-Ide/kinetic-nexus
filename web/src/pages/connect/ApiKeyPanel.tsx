@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { RotateCw, Copy, Check, ShieldAlert } from 'lucide-preact';
-import { POST, getIdentity } from '../../api';
+import { POST } from '../../api';
 import { Button, Modal, FormError } from '../../ui';
+import { isOwner as ownerRole } from '../../lib/access';
 import s from '../pages.module.css';
 
 // The master API key (Phase 7.13a).
@@ -21,7 +22,7 @@ export function ApiKeyPanel({
   apiKeyMasked: string | null;
   onRotated: () => void;
 }) {
-  const isOwner = getIdentity()?.role === 'owner';
+  const isOwner = ownerRole();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Trash2 } from 'lucide-preact';
 import { POST, ApiError } from '../../api';
 import { Card, Button, Modal, FormError } from '../../ui';
+import { canWrite } from '../../lib/access';
 import s from '../pages.module.css';
 
 // Empty the response cache. This is a blunt instrument by design: every namespace shares one Redis
@@ -39,10 +40,16 @@ export function PurgeCard({ entries, onPurged }: { entries: number; onPurged: ()
         is affected.
       </p>
       {done !== null && <p class={s.purgeDone}>Cleared {done.toLocaleString()} cached {done === 1 ? 'entry' : 'entries'}.</p>}
-      <Button variant="danger" size="sm" onClick={() => { setDone(null); setError(null); setConfirming(true); }} disabled={entries === 0}>
-        <Trash2 size={13} /> Purge cache
-      </Button>
-      {entries === 0 && <span class={s.purgeEmpty}>The cache is already empty.</span>}
+      {canWrite() ? (
+        <>
+          <Button variant="danger" size="sm" onClick={() => { setDone(null); setError(null); setConfirming(true); }} disabled={entries === 0}>
+            <Trash2 size={13} /> Purge cache
+          </Button>
+          {entries === 0 && <span class={s.purgeEmpty}>The cache is already empty.</span>}
+        </>
+      ) : (
+        <span class={s.purgeEmpty}>You have read-only access.</span>
+      )}
 
       {confirming && (
         <Modal

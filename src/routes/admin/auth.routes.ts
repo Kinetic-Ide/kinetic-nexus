@@ -22,8 +22,10 @@ import * as metrics       from '../../lib/metrics';
 import { recordAudit }    from '../../services/audit.service';
 import { adminGuard, adminOwnerGuard } from './guard';
 import { AUTH_RATE_LIMIT, rateLimited, withRateLimit } from '../../lib/routeRateLimits';
-import { getClaimStatus, claimGateway } from '../../services/firstRun.service';
+import { getClaimStatus, claimGateway, factoryReset, RESET_CONFIRM_PHRASE } from '../../services/firstRun.service';
+import { safeEqual } from '../../lib/timingSafe';
 import { changeOwnPassword, regenerateRecoveryKey, resetPasswordWithRecoveryKey, getUser, AdminUserError } from '../../services/adminUsers.service';
+import { describeUserAgent } from '../../lib/userAgent';
 
 const loginSchema = z.object({
   // Optional, because a gateway that has not been claimed yet still signs in exactly as it did in
@@ -75,7 +77,7 @@ export default async function adminAuthRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'password is required' });
     }
 
-    const result = await auth.login(parsed.data, request.ip);
+    const result = await auth.login(parsed.data, request.ip, request.headers['user-agent']);
 
     // Record the sign-in outcome (never the credential). A failed or locked-out attempt is as
     // security-relevant as a success, so every branch is logged with its outcome.
@@ -255,7 +257,10 @@ export default async function adminAuthRoutes(fastify: FastifyInstance) {
       });
       // Signed in immediately: making someone create an account and then type the password they
       // just chose is ceremony, not security.
-      const session = await auth.createSession({ userId: result.user.id });
+      const session = await auth.createSession(
+        { userId: result.user.id },
+        { ua: request.headers['user-agent'], ip: request.ip },
+      );
       return reply.send({
         user: result.user,
         recoveryKey: result.recoveryKey,
@@ -276,6 +281,39 @@ export default async function adminAuthRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // ── Factory reset (Phase 7.13b) ───────────────────────────────────
+  //
+  // Three proofs, deliberately of different kinds: an OWNER session (you run this gateway),
+  // the MASTER PASSWORD from the server's environment (you installed it — the same proof the
+  // claim demands, because un-claiming is claiming's mirror), and the TYPED PHRASE (you are
+  // doing this on purpose, not autocompleting a form). Refusals are audited; success cannot
+  // be — it empties the audit table itself — so the service logs to stdout and says so.
+  fastify.post('/admin/setup/reset', withRateLimit(adminOwnerGuard, AUTH_RATE_LIMIT), async (request, reply) => {
+    const parsed = z.object({
+      masterPassword: z.string().min(1),
+      confirm:        z.string().min(1),
+    }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'The master password and the confirmation phrase are both required.' });
+    }
+
+    if (parsed.data.confirm !== RESET_CONFIRM_PHRASE) {
+      return reply.code(400).send({ error: `Type the phrase exactly: ${RESET_CONFIRM_PHRASE}` });
+    }
+
+    if (!safeEqual(parsed.data.masterPassword, process.env.ADMIN_PASSWORD)) {
+      recordAudit({
+        action: 'admin.reset', method: 'POST', actorRole: request.adminRole ?? 'system',
+        actorId: request.adminUserId ?? null, actorName: request.adminUserName ?? null,
+        ip: request.ip, status: 401, detail: JSON.stringify({ outcome: 'refused_master_password' }),
+      });
+      return reply.code(401).send({ error: 'That is not the administrator password from your server’s environment.' });
+    }
+
+    const { tablesCleared, redisKeysCleared } = await factoryReset();
+    return reply.send({ success: true, tablesCleared, redisKeysCleared });
+  });
+
   // ── Your own account (Phase 7.13a) ────────────────────────────────
 
   fastify.get('/admin/me', adminGuard, async (request, reply) => {
@@ -283,6 +321,50 @@ export default async function adminAuthRoutes(fastify: FastifyInstance) {
     // A token-minted or pre-accounts session has a role but no person. Reporting the role with a
     // null account is the honest answer, and lets the dashboard say so rather than invent a name.
     return reply.send({ account, role: request.adminRole ?? 'viewer' });
+  });
+
+  // ── Your sessions (Phase 7.13b) ───────────────────────────────────
+  //
+  // Every route here operates strictly on the CALLER'S OWN sessions — there is no user id in
+  // any path. An owner ends someone else's access through suspend/remove on the People page,
+  // which already kills sessions on the next request; these exist so a person can see where
+  // they themselves are signed in and end a session they do not recognise.
+
+  fastify.get('/admin/me/sessions', adminGuard, async (request, reply) => {
+    const userId = accountOf(request, reply);
+    if (!userId) return reply;
+    const sessions = await auth.listSessions(userId, bearer(request));
+    return reply.send({
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        // The phrase a person recognises ("Chrome on Windows"), with the raw string alongside
+        // for when coarse is not enough. Descriptive only — any client can claim any agent.
+        browser: describeUserAgent(s.ua),
+        userAgent: s.ua,
+        ip: s.ip,
+        createdAt: s.createdAt,
+        lastSeenAt: s.lastSeenAt,
+        current: s.current,
+      })),
+    });
+  });
+
+  fastify.delete('/admin/me/sessions/:id', adminGuard, async (request, reply) => {
+    const userId = accountOf(request, reply);
+    if (!userId) return reply;
+    const { id } = request.params as { id: string };
+    // Ownership is checked against the caller's own index — an id belonging to anyone else,
+    // however obtained, revokes nothing and answers the same as one that never existed.
+    const ok = await auth.revokeSessionById(userId, id);
+    if (!ok) return reply.code(404).send({ error: 'No such session.' });
+    return reply.send({ success: true });
+  });
+
+  fastify.post('/admin/me/sessions/revoke-others', adminGuard, async (request, reply) => {
+    const userId = accountOf(request, reply);
+    if (!userId) return reply;
+    const revoked = await auth.revokeOtherSessions(userId, bearer(request));
+    return reply.send({ success: true, revoked });
   });
 
   fastify.post('/admin/me/password', withRateLimit(adminGuard, AUTH_RATE_LIMIT), async (request, reply) => {

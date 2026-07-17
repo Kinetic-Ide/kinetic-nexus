@@ -3,6 +3,7 @@ import { Copy, Check, ShieldAlert } from 'lucide-preact';
 import { POST, type MeResponse } from '../../api';
 import { useApi } from '../../hooks/useApi';
 import { Card, Button, Badge, Field, Input, FormError, Spinner } from '../../ui';
+import { Sessions } from './Sessions';
 import s from './admin.module.css';
 import p from '../pages.module.css';
 
@@ -192,6 +193,8 @@ export function MyAccount() {
           </div>
         </>
       )}
+
+      <Sessions />
     </>
   );
 }

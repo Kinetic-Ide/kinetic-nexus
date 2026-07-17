@@ -191,7 +191,7 @@ describe('completeLogin', () => {
     expect(out).toEqual({ token: 'sess-owner', role: 'owner', expiresIn: 43200 });
     // No email claim in this token, so there is no account to tie the sign-in to and the session
     // carries a bare role — the unattributed shape SSO always had. See the provisioning tests below.
-    expect(sessionMock.createSession).toHaveBeenCalledWith({ role: 'owner' });
+    expect(sessionMock.createSession).toHaveBeenCalledWith({ role: 'owner' }, expect.any(Object));
     // single use: the state is consumed before the exchange
     expect(redisMock.del).toHaveBeenCalledWith('nexus:sso:state:state-xyz');
     // the exchange carried the PKCE verifier and the client secret
@@ -206,7 +206,7 @@ describe('completeLogin', () => {
     joseMock.jwtVerify.mockResolvedValue({ payload: { nonce: 'nonce-1', groups: ['engineering'], sub: 'u2' } });
     const out = await sso.completeLogin('auth-code', 'state-xyz');
     expect(out.role).toBe('viewer');
-    expect(sessionMock.createSession).toHaveBeenCalledWith({ role: 'viewer' });
+    expect(sessionMock.createSession).toHaveBeenCalledWith({ role: 'viewer' }, expect.any(Object));
   });
 
   // ── Provisioning (Phase 7.13a) ──────────────────────────────────────────────
@@ -223,7 +223,7 @@ describe('completeLogin', () => {
     const out = await sso.completeLogin('auth-code', 'state-xyz');
     expect(usersMock.provisionSsoUser).toHaveBeenCalledWith('Ada@Example.com', 'Ada L', 'owner');
     // The session names the account, not a role: authority is then read from the account.
-    expect(sessionMock.createSession).toHaveBeenCalledWith({ userId: 'user-9' });
+    expect(sessionMock.createSession).toHaveBeenCalledWith({ userId: 'user-9' }, expect.any(Object));
     expect(out).toEqual({ token: 'sess-user-9', role: 'owner', expiresIn: 43200 });
   });
 

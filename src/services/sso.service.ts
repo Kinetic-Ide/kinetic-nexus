@@ -300,7 +300,11 @@ export async function beginLogin(redirectUri: string): Promise<string> {
  * issuer, audience, and expiry with `jose`, checks the `nonce`, maps the claims to a role,
  * and mints a session. Returns the bearer token for the dashboard to store.
  */
-export async function completeLogin(code: string, state: string): Promise<{ token: string; role: AdminRole; expiresIn: number }> {
+export async function completeLogin(
+  code: string,
+  state: string,
+  meta: { ua?: string | null; ip?: string | null } = {},
+): Promise<{ token: string; role: AdminRole; expiresIn: number }> {
   if (!code || !state) throw new SsoError('invalid_request');
 
   const raw = await redis.get(STATE_PREFIX + state);
@@ -366,7 +370,7 @@ export async function completeLogin(code: string, state: string): Promise<{ toke
     const user = await provisionSsoUser(email, name, mappedRole);
     // Suspended: an offboarded person must not walk back in through the identity provider.
     if (!user) throw new SsoError('account_suspended', 'This account is suspended. Contact an owner.');
-    const session = await createSession({ userId: user.id });
+    const session = await createSession({ userId: user.id }, meta);
     return { token: session.token, role: user.role, expiresIn: session.expiresIn };
   }
 
@@ -377,6 +381,6 @@ export async function completeLogin(code: string, state: string): Promise<{ toke
     '  SSO: the ID token carried no "email" claim, so this sign-in cannot be tied to an account and ' +
     'will be recorded without a name. Add "email" to the configured scopes to attribute it.',
   );
-  const session = await createSession({ role: mappedRole });
+  const session = await createSession({ role: mappedRole }, meta);
   return { token: session.token, role: mappedRole, expiresIn: session.expiresIn };
 }

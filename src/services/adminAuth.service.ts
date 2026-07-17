@@ -260,7 +260,37 @@ export async function clearFailedAttempts(source: string): Promise<void> {
 // primary-key lookup on routes that are nowhere near the proxy hot path, and buys the property an
 // operator actually expects — remove someone, and they are out on their very next request.
 
-interface SessionValue { v: 1; uid?: string; role?: AdminRole }
+interface SessionValue {
+  v: 1 | 2;
+  uid?: string;
+  role?: AdminRole;
+  // v2 (Phase 7.13b): where and when this session lives, so a person can SEE their sessions.
+  // Descriptive only — never an authentication factor: any client can claim any user-agent,
+  // and an address proves nothing about who is typing. The one honest use of this data is
+  // showing it to its owner so they can recognise a session that is not theirs and end it.
+  ua?: string;
+  ip?: string;
+  createdAt?: number;   // epoch ms
+  lastSeenAt?: number;  // epoch ms, refreshed at most once a minute
+}
+
+/** One of a person's live sessions, as shown on the "Where you're signed in" panel. */
+export interface SessionView {
+  id: string;           // the session's storage hash — identifies it without revealing the token
+  ua: string | null;
+  ip: string | null;
+  createdAt: number | null;
+  lastSeenAt: number | null;
+  current: boolean;
+}
+
+export interface SessionMeta { ua?: string | null; ip?: string | null }
+
+/** Per-user set of live session hashes, so "your sessions" is a lookup, not a Redis scan. */
+const SESSION_INDEX_PREFIX = 'nexus:adminsessionidx:';
+
+/** How stale lastSeenAt may get before a request refreshes it — one write a minute, not per request. */
+const LAST_SEEN_REFRESH_MS = 60_000;
 
 /** Who is making this request. `userId` is null for a token-minted or pre-accounts session. */
 export interface SessionIdentity {
@@ -271,10 +301,29 @@ export interface SessionIdentity {
 
 export type SessionSubject = { userId: string } | { role: AdminRole };
 
-export async function createSession(subject: SessionSubject = { role: 'owner' }): Promise<{ token: string; expiresIn: number }> {
+export async function createSession(
+  subject: SessionSubject = { role: 'owner' },
+  meta: SessionMeta = {},
+): Promise<{ token: string; expiresIn: number }> {
   const token = randomBytes(32).toString('hex');
-  const value: SessionValue = 'userId' in subject ? { v: 1, uid: subject.userId } : { v: 1, role: subject.role };
-  await redis.set(SESSION_PREFIX + sha256(token), JSON.stringify(value), 'EX', SESSION_TTL_SECONDS);
+  const hash  = sha256(token);
+  const now   = Date.now();
+  const value: SessionValue = {
+    v: 2,
+    ...('userId' in subject ? { uid: subject.userId } : { role: subject.role }),
+    ...(meta.ua ? { ua: meta.ua.slice(0, 300) } : {}),
+    ...(meta.ip ? { ip: meta.ip } : {}),
+    createdAt: now,
+    lastSeenAt: now,
+  };
+  await redis.set(SESSION_PREFIX + hash, JSON.stringify(value), 'EX', SESSION_TTL_SECONDS);
+
+  // Index the session under its account so "your sessions" is a set lookup. The index's TTL is
+  // pushed out on every new session; members whose session has since expired are pruned on read.
+  if ('userId' in subject) {
+    await redis.sadd(SESSION_INDEX_PREFIX + subject.userId, hash);
+    await redis.expire(SESSION_INDEX_PREFIX + subject.userId, SESSION_TTL_SECONDS);
+  }
   return { token, expiresIn: SESSION_TTL_SECONDS };
 }
 
@@ -288,7 +337,8 @@ export async function createSession(subject: SessionSubject = { role: 'owner' })
  */
 export async function resolveSession(token: string): Promise<SessionIdentity | null> {
   if (!token) return null;
-  const raw = await redis.get(SESSION_PREFIX + sha256(token));
+  const hash = sha256(token);
+  const raw = await redis.get(SESSION_PREFIX + hash);
   if (raw === null) return null;
 
   let parsed: SessionValue | null = null;
@@ -297,6 +347,13 @@ export async function resolveSession(token: string): Promise<SessionIdentity | n
     if (v && typeof v === 'object') parsed = v as SessionValue;
   } catch {
     parsed = null; // a pre-7.13a session: a bare role string, not JSON
+  }
+
+  // Keep lastSeenAt honest without a Redis write per request: refresh only once it is a minute
+  // stale, preserving the TTL — activity must never quietly extend a session's life.
+  if (parsed?.v === 2 && parsed.lastSeenAt && Date.now() - parsed.lastSeenAt > LAST_SEEN_REFRESH_MS) {
+    parsed.lastSeenAt = Date.now();
+    await redis.set(SESSION_PREFIX + hash, JSON.stringify(parsed), 'KEEPTTL');
   }
 
   if (!parsed?.uid) {
@@ -318,7 +375,89 @@ export async function isValidSession(token: string): Promise<boolean> {
 }
 
 export async function destroySession(token: string): Promise<void> {
-  if (token) await redis.del(SESSION_PREFIX + sha256(token));
+  if (!token) return;
+  const hash = sha256(token);
+  // Unindex before deleting: the value names the account whose index holds this hash.
+  const raw = await redis.get(SESSION_PREFIX + hash);
+  if (raw) {
+    try {
+      const v = JSON.parse(raw) as SessionValue;
+      if (v?.uid) await redis.srem(SESSION_INDEX_PREFIX + v.uid, hash);
+    } catch { /* bare legacy session — nothing indexed */ }
+  }
+  await redis.del(SESSION_PREFIX + hash);
+}
+
+// ── Your sessions (Phase 7.13b) ───────────────────────────────────────────────
+
+/**
+ * Every live session belonging to an account, newest activity first. Index members whose
+ * session has since expired are pruned as they are discovered — the set is a convenience
+ * index, never the authority; the session key itself is.
+ */
+export async function listSessions(userId: string, currentToken?: string): Promise<SessionView[]> {
+  const indexKey = SESSION_INDEX_PREFIX + userId;
+  const hashes = await redis.smembers(indexKey);
+  if (hashes.length === 0) return [];
+
+  const currentHash = currentToken ? sha256(currentToken) : null;
+  const values = await redis.mget(hashes.map((h) => SESSION_PREFIX + h));
+
+  const out: SessionView[] = [];
+  const dead: string[] = [];
+  for (let i = 0; i < hashes.length; i++) {
+    const raw = values[i];
+    if (raw === null) { dead.push(hashes[i]); continue; }
+    let v: SessionValue | null = null;
+    try { v = JSON.parse(raw) as SessionValue; } catch { /* not one of ours */ }
+    // A session in this index that belongs to someone else has been tampered with — skip it.
+    if (!v || v.uid !== userId) { dead.push(hashes[i]); continue; }
+    out.push({
+      id: hashes[i],
+      ua: v.ua ?? null,
+      ip: v.ip ?? null,
+      createdAt: v.createdAt ?? null,
+      lastSeenAt: v.lastSeenAt ?? null,
+      current: hashes[i] === currentHash,
+    });
+  }
+  if (dead.length) await redis.srem(indexKey, ...dead);
+
+  return out.sort((a, b) => (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0));
+}
+
+/**
+ * End one of the CALLER'S OWN sessions by its id. Membership in the caller's index is the
+ * ownership check: an id that is not theirs — however obtained — removes nothing.
+ */
+export async function revokeSessionById(userId: string, sessionId: string): Promise<boolean> {
+  const owned = await redis.sismember(SESSION_INDEX_PREFIX + userId, sessionId);
+  if (!owned) return false;
+  await redis.del(SESSION_PREFIX + sessionId);
+  await redis.srem(SESSION_INDEX_PREFIX + userId, sessionId);
+  return true;
+}
+
+/** Sign out everywhere else: every session but the one making the request. */
+export async function revokeOtherSessions(userId: string, currentToken: string): Promise<number> {
+  const currentHash = sha256(currentToken);
+  const sessions = await listSessions(userId, currentToken);
+  let revoked = 0;
+  for (const s of sessions) {
+    if (s.id === currentHash) continue;
+    if (await revokeSessionById(userId, s.id)) revoked++;
+  }
+  return revoked;
+}
+
+/** Every session an account holds, gone — the offboarding half (removal, factory reset). */
+export async function revokeAllSessions(userId: string): Promise<number> {
+  const sessions = await listSessions(userId);
+  let revoked = 0;
+  for (const s of sessions) {
+    if (await revokeSessionById(userId, s.id)) revoked++;
+  }
+  return revoked;
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -354,8 +493,12 @@ async function alertAdminLockout(source: string): Promise<void> {
 export async function login(
   input: { email?: string; password: string; code?: string },
   source: string,
+  userAgent?: string | null,
 ): Promise<LoginResult> {
   const { password, code } = input;
+  // The source address doubles as the session's recorded IP — it is already the truth the
+  // lockout keys on, so the sessions panel shows the same address the throttle sees.
+  const meta: SessionMeta = { ua: userAgent ?? null, ip: source };
   const retryAfter = await lockoutRemaining(source);
   if (retryAfter > 0) return { ok: false, reason: 'locked_out', retryAfter };
 
@@ -380,7 +523,7 @@ export async function login(
   const tokenRole = await verifyAdminApiToken(password);
   if (tokenRole) {
     await clearFailedAttempts(source);
-    const { token, expiresIn } = await createSession({ role: tokenRole });
+    const { token, expiresIn } = await createSession({ role: tokenRole }, meta);
     return { ok: true, token, expiresIn, role: tokenRole, userId: null, name: null };
   }
 
@@ -402,7 +545,7 @@ export async function login(
     }
 
     await clearFailedAttempts(source);
-    const { token, expiresIn } = await createSession({ role: 'owner' });
+    const { token, expiresIn } = await createSession({ role: 'owner' }, meta);
     return { ok: true, token, expiresIn, role: 'owner', userId: null, name: null };
   }
 
@@ -435,7 +578,7 @@ export async function login(
   await clearFailedAttempts(source);
   // Fire and forget: a last-seen timestamp must never fail a sign-in.
   void prisma.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
-  const { token, expiresIn } = await createSession({ userId: user.id });
+  const { token, expiresIn } = await createSession({ userId: user.id }, meta);
   return { ok: true, token, expiresIn, role: asRole(user.role), userId: user.id, name: user.name };
 }
 

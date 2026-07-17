@@ -4,6 +4,7 @@ import { POST, DEL, ApiError, type AdminApiTokenRow } from '../../api';
 import { Card, Button, Badge, Spinner, Table, Field, Input, Select, FieldRow, CopyField, FormError, Modal, type Column } from '../../ui';
 import { useApi } from '../../hooks/useApi';
 import { relativeTime } from '../../lib/format';
+import { isOwner } from '../../lib/access';
 import s from '../pages.module.css';
 
 // Admin API tokens: the credential scripts and CI use instead of the password (they cannot present a
@@ -19,6 +20,7 @@ function friendlyError(err: unknown, fallback: string): string {
 
 export function ApiTokens() {
   const { data, loading, error, reload } = useApi<{ tokens: AdminApiTokenRow[] }>('/admin/tokens');
+  const owner = isOwner();
 
   const [name, setName]         = useState('');
   const [role, setRole]         = useState<'owner' | 'viewer'>('owner');
@@ -54,34 +56,44 @@ export function ApiTokens() {
     { key: 'maskedKey', label: 'Token', render: (t) => <code class={s.tokenMask}>{t.maskedKey}</code> },
     { key: 'lastUsedAt', label: 'Last used', align: 'right', render: (t) => <span class={s.tokenWhen}>{t.lastUsedAt ? relativeTime(t.lastUsedAt) : 'never'}</span> },
     { key: 'createdAt', label: 'Created', align: 'right', render: (t) => <span class={s.tokenWhen} title={t.createdAt}>{relativeTime(t.createdAt)}</span> },
-    { key: 'actions', label: '', align: 'right', render: (t) => (
-      <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setRevoking(t); }} aria-label={`Revoke ${t.name}`}><Trash2 size={13} /></Button>
+    { key: 'actions', label: '', align: 'right', render: (t) => (owner
+      ? <Button size="sm" variant="ghost" onClick={() => { setFormErr(null); setRevoking(t); }} aria-label={`Revoke ${t.name}`}><Trash2 size={13} /></Button>
+      : null
     ) },
   ];
 
   return (
     <>
-      <Card heading="Create a token">
-        <p class={s.setDesc}>
-          For scripts and CI. An <b>owner</b> token can do anything the dashboard can; a <b>viewer</b>{' '}
-          token can only read. The token is shown once — copy it now.
-        </p>
-        {formError && <FormError>{formError}</FormError>}
-        <FieldRow>
-          <Field label="Name" hint="what it's for"><Input value={name} placeholder="ci-pipeline" onInput={(e) => setName((e.target as HTMLInputElement).value)} /></Field>
-          <Field label="Role"><Select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as 'owner' | 'viewer')}><option value="owner">owner</option><option value="viewer">viewer</option></Select></Field>
-        </FieldRow>
-        <Button variant="primary" size="sm" onClick={mint} disabled={!name.trim() || minting}>
-          <KeyRound size={13} /> {minting ? 'Creating…' : 'Create token'}
-        </Button>
+      {owner ? (
+        <Card heading="Create a token">
+          <p class={s.setDesc}>
+            For scripts and CI. An <b>owner</b> token can do anything the dashboard can; a <b>viewer</b>{' '}
+            token can only read. The token is shown once — copy it now.
+          </p>
+          {formError && <FormError>{formError}</FormError>}
+          <FieldRow>
+            <Field label="Name" hint="what it's for"><Input value={name} placeholder="ci-pipeline" onInput={(e) => setName((e.target as HTMLInputElement).value)} /></Field>
+            <Field label="Role"><Select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as 'owner' | 'viewer')}><option value="owner">owner</option><option value="viewer">viewer</option></Select></Field>
+          </FieldRow>
+          <Button variant="primary" size="sm" onClick={mint} disabled={!name.trim() || minting}>
+            <KeyRound size={13} /> {minting ? 'Creating…' : 'Create token'}
+          </Button>
 
-        {fresh && (
-          <div class={s.tokenFresh}>
-            <p class={s.tokenFreshWarn}><b>Copy “{fresh.name}” now.</b> This is the only time the full token is shown.</p>
-            <CopyField value={fresh.token} />
-          </div>
-        )}
-      </Card>
+          {fresh && (
+            <div class={s.tokenFresh}>
+              <p class={s.tokenFreshWarn}><b>Copy “{fresh.name}” now.</b> This is the only time the full token is shown.</p>
+              <CopyField value={fresh.token} />
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card heading="API tokens">
+          <p class={s.setDesc}>
+            The credential scripts and CI use instead of a password. Only an owner can create or
+            revoke them — you can see what exists below.
+          </p>
+        </Card>
+      )}
 
       <Card heading="Active tokens" class={s.section}>
         {loading && !data && <div class={s.centered}><Spinner /> <span>Loading tokens…</span></div>}

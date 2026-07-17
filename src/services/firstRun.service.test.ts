@@ -28,6 +28,11 @@ const { prismaMock, usersMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/prisma', () => ({ prisma: prismaMock }));
+// The factory reset pulls in Redis scanning and both drain pipelines; none of the claim tests
+// exercise them, but importing the real modules would demand a live REDIS_URL at test time.
+vi.mock('../lib/redisScan', () => ({ deleteKeys: vi.fn(async () => 0) }));
+vi.mock('./audit.service', () => ({ drainAudit: vi.fn(async () => undefined) }));
+vi.mock('./usagePipeline', () => ({ drainUsage: vi.fn(async () => undefined) }));
 vi.mock('./adminUsers.service', async () => {
   // The real error class travels through: the routes map its `status`, so a stub that threw a plain
   // Error would let a broken status mapping pass unnoticed.

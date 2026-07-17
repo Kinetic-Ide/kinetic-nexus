@@ -23,19 +23,19 @@ function humanTtl(secs: number): string {
   const d = secs / 86400; return `${d.toFixed(secs % 86400 ? 1 : 0)} ${d === 1 ? 'day' : 'days'}`;
 }
 
-export function CacheControl() {
+export function CacheControl({ onSaved }: { onSaved?: () => void }) {
   return (
     <SettingsSection<CacheConfig>
       path="/admin/settings/cache"
       title="Response cache"
       description="Serve an identical repeat request straight from cache instead of calling the provider again. Off by default — a fresh gateway caches nothing until you turn this on."
     >
-      {(data, ctx) => <CacheForm data={data} ctx={ctx} />}
+      {(data, ctx) => <CacheForm data={data} ctx={ctx} onSaved={onSaved} />}
     </SettingsSection>
   );
 }
 
-function CacheForm({ data, ctx }: { data: CacheConfig; ctx: SaveCtx<CacheConfig> }) {
+function CacheForm({ data, ctx, onSaved }: { data: CacheConfig; ctx: SaveCtx<CacheConfig>; onSaved?: () => void }) {
   // Seeded once on mount; SettingsSection remounts this form after a save so it re-seeds from what
   // the gateway actually stored.
   const [enabled, setEnabled] = useState(data.enabled);
@@ -69,7 +69,13 @@ function CacheForm({ data, ctx }: { data: CacheConfig; ctx: SaveCtx<CacheConfig>
         meantime. Keep it short if your prompts read from anything that moves.
       </p>
 
-      <SaveBar ctx={ctx} dirty={dirty} onSave={() => ctx.save({ enabled, ttlSeconds })} />
+      <SaveBar
+        ctx={ctx}
+        dirty={dirty}
+        // The page header's on/off badge reads from /admin/cache/stats, a different request from
+        // the one this form writes — tell the page to refetch, or the badge lies until a reload.
+        onSave={() => void ctx.save({ enabled, ttlSeconds }).then((r) => { if (r) onSaved?.(); })}
+      />
     </>
   );
 }

@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // An in-memory stand-in for the Redis commands this service uses. TTLs are recorded
 // rather than ticked; the lockout tests set them directly.
 const { store, prismaMock } = vi.hoisted(() => {
-  const store = { kv: new Map<string, string>(), ttl: new Map<string, number>() };
+  const store = { kv: new Map<string, string>(), ttl: new Map<string, number>(), sets: new Map<string, Set<string>>() };
   const prismaMock = {
     adminAuth: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     // Accounts (Phase 7.13a). `count` is what isUnclaimed reads: 0 active owners = an unclaimed
@@ -37,6 +37,7 @@ vi.mock('../lib/redis', () => ({
     get:    vi.fn(async (k: string) => store.kv.get(k) ?? null),
     // Honours the `EX <seconds>` form the service uses, so TTL-dependent logic is
     // exercised rather than accidentally bypassed.
+    // Honours `EX <seconds>` and `KEEPTTL` (the lastSeenAt refresh must not extend a session).
     set:    vi.fn(async (k: string, v: string, ex?: string, secs?: number) => {
       store.kv.set(k, v);
       if (ex === 'EX' && typeof secs === 'number') store.ttl.set(k, secs);
@@ -47,6 +48,12 @@ vi.mock('../lib/redis', () => ({
     expire: vi.fn(async (k: string, s: number) => { store.ttl.set(k, s); return 1; }),
     ttl:    vi.fn(async (k: string) => (store.kv.has(k) ? (store.ttl.get(k) ?? -1) : -2)),
     exists: vi.fn(async (k: string) => (store.kv.has(k) ? 1 : 0)),
+    // Set commands back the per-user session index (Phase 7.13b).
+    sadd:      vi.fn(async (k: string, ...ms: string[]) => { const s = store.sets.get(k) ?? new Set<string>(); ms.forEach((m) => s.add(m)); store.sets.set(k, s); return ms.length; }),
+    srem:      vi.fn(async (k: string, ...ms: string[]) => { const s = store.sets.get(k); if (!s) return 0; let n = 0; ms.forEach((m) => { if (s.delete(m)) n++; }); return n; }),
+    smembers:  vi.fn(async (k: string) => [...(store.sets.get(k) ?? [])]),
+    sismember: vi.fn(async (k: string, m: string) => (store.sets.get(k)?.has(m) ? 1 : 0)),
+    mget:      vi.fn(async (ks: string[]) => ks.map((k) => store.kv.get(k) ?? null)),
   },
 }));
 // The real AES-256-GCM envelope needs a key; the test bootstrap sets one. Swap it for
@@ -80,6 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   store.kv.clear();
   store.ttl.clear();
+  store.sets.clear();
   process.env.ADMIN_PASSWORD = PASSWORD;
   // Unclaimed unless a test says otherwise. Every Phase 6 expectation below is written against this
   // state on purpose: it is what an existing deployment looks like the moment it upgrades, and the

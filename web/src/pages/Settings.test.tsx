@@ -102,6 +102,27 @@ describe('Settings — network policy', () => {
     await waitFor(() => expect(screen.getByText('env.host')).toBeInTheDocument());
     expect(screen.getByText(/cannot be changed from here/i)).toBeInTheDocument();
   });
+
+  it('gives an ADMIN the facts but not the save — network policy is owner ground (7.13b)', async () => {
+    // Loosening SSRF policy changes what the gateway will fetch on behalf of anyone. The server's
+    // PUT is owner-only; the panel says so instead of offering a button that can only 403.
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'admin', userId: 'u2', name: 'Ada' }));
+    render(<Settings />);
+    await openTab('Network');
+    await waitFor(() => expect(screen.getByText('env.host')).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/only an owner can change these settings/i)).toBeInTheDocument();
+  });
+
+  it('shows a VIEWER the routing weight with no save at all (7.13b)', async () => {
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'viewer', userId: 'u9', name: 'V' }));
+    render(<Settings />);
+    await waitFor(() => expect(screen.getByText(/first available key wins/i)).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/read-only access/i)).toBeInTheDocument();
+  });
 });
 
 describe('Settings — compliance', () => {

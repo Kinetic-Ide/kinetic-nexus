@@ -83,7 +83,9 @@ export default async function adminSsoRoutes(fastify: FastifyInstance) {
     if (q.error) return bounce(reply, 'verification_failed');
 
     try {
-      const { token, role } = await sso.completeLogin(q.code ?? '', q.state ?? '');
+      const { token, role } = await sso.completeLogin(q.code ?? '', q.state ?? '', {
+        ua: request.headers['user-agent'], ip: request.ip,
+      });
       recordAudit({
         action: 'auth.sso.login', method: 'GET', actorRole: role, actor: 'sso',
         ip: request.ip, status: 200, detail: JSON.stringify({ outcome: 'success' }),

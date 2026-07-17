@@ -593,6 +593,19 @@ export interface AdminInvitesResponse { invites: AdminInviteRow[]; ttlDays: numb
 /** Mirrors GET /admin/me. `account` is null for a session minted from an admin API token. */
 export interface MeResponse { account: AdminUserRow | null; role: AdminRole }
 
+/** One signed-in session, as GET /admin/me/sessions reports it (Phase 7.13b). */
+export interface SessionRow {
+  id:         string;   // an HMAC of the token — names the session without being usable as one
+  browser:    string;   // "Chrome on Windows" — descriptive only, any client can claim any agent
+  userAgent:  string;
+  ip:         string | null;
+  createdAt:  number;   // epoch ms
+  lastSeenAt: number;   // epoch ms, refreshed at most once a minute
+  current:    boolean;  // the session making this request
+}
+
+export interface SessionsResponse { sessions: SessionRow[] }
+
 export const GET   = <T = unknown>(p: string) => api<T>('GET', p);
 export const POST  = <T = unknown>(p: string, b?: unknown) => api<T>('POST', p, b);
 export const PUT   = <T = unknown>(p: string, b?: unknown) => api<T>('PUT', p, b);

@@ -173,3 +173,33 @@ describe('Teams — team stats (P7.10)', () => {
     expect(screen.getByText('85.7%')).toBeInTheDocument(); // 3 of 3.50
   });
 });
+
+describe('Teams — as a viewer (7.13b)', () => {
+  // The server refuses every one of these writes; the UI's job is to not offer them. The DATA
+  // stays visible — a viewer exists to look.
+  beforeEach(() => {
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'viewer', userId: 'u9', name: 'V' }));
+  });
+
+  it('sees the teams but no way to change them', async () => {
+    render(<Teams />);
+    await waitFor(() => expect(screen.getByText('Frontend')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /new team/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /edit frontend/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /delete frontend/i })).not.toBeInTheDocument();
+  });
+
+  it('sees the access keys but cannot create, copy, or revoke one', async () => {
+    render(<Teams />);
+    await waitFor(() => expect(screen.getByText('Frontend')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('tab', { name: /access keys/i }));
+    await waitFor(() => expect(screen.getByText('Abbas')).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /create key/i })).not.toBeInTheDocument();
+    // Copy is withheld with the rest: it reveals the live key, and a copyable credential is
+    // not "read-only" in any sense that matters.
+    expect(screen.queryByRole('button', { name: /copy abbas/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /revoke abbas/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/needs write access/i)).toBeInTheDocument();
+  });
+});

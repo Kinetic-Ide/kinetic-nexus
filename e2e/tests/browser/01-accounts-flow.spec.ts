@@ -2,6 +2,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD } from '../../setup/stacks';
 import { UI_OWNER as OWNER } from '../../helpers/personas';
 import { totpCode } from '../../helpers/totp';
+import { saveState } from '../../helpers/state';
 
 // The accounts story again — but through a REAL browser against the REAL dashboard bundle,
 // served by the same compiled gateway a deployment runs. This is the suite that would have
@@ -77,6 +78,9 @@ test('two-factor setup completes in a real browser', async () => {
   const secretEl = page.getByText(/^[A-Z2-7]{32}$/);
   await expect(secretEl).toBeVisible();
   totpSecret = (await secretEl.textContent()) ?? '';
+  // 02-sessions-gating-reset signs in as this owner later, in a fresh worker — persist the
+  // secret it will need to play the authenticator, because the gateway shows it only once.
+  saveState('ui-owner-totp', totpSecret);
 
   // Play the authenticator: compute the 6-digit code the app would show right now.
   await page.getByPlaceholder('123456').fill(totpCode(totpSecret));

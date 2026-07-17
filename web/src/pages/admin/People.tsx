@@ -158,7 +158,7 @@ export function People() {
             {u.name}
             {u.id === me?.userId && <span class={s.you}>You</span>}
           </span>
-          <span class={s.personEmail}>{u.email}</span>
+          <span class={s.personEmail} title={u.email}>{u.email}</span>
         </div>
       ),
     },
@@ -170,7 +170,9 @@ export function People() {
         isOwner && u.id !== me?.userId
           ? (
             <Select
+              class={s.roleSelect}
               value={u.role}
+              aria-label={`Role for ${u.name}`}
               onChange={(e) => void act(() => PATCH(`/admin/users/${u.id}`, { role: (e.target as HTMLSelectElement).value }))}
             >
               <option value="viewer">{roles.viewer.label}</option>

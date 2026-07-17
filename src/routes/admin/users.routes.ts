@@ -30,6 +30,7 @@ import { ROLE_LABELS } from '../../lib/roles';
 import { adminGuard, adminOwnerGuard } from './guard';
 import { AUTH_RATE_LIMIT, ADMIN_WRITE_RATE_LIMIT, rateLimited, withRateLimit } from '../../lib/routeRateLimits';
 import { recordAudit } from '../../services/audit.service';
+import { revokeAllSessions } from '../../services/adminAuth.service';
 
 const roleSchema = z.enum(['owner', 'admin', 'viewer']);
 
@@ -65,7 +66,12 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      return reply.send({ user: await updateUser(id, parsed.data) });
+      const user = await updateUser(id, parsed.data);
+      // Suspension ERASES the person's sessions rather than merely refusing them per-request:
+      // a later restore must mean "sign in again", never the resurrection of every session
+      // they held before — those are exactly the sessions an operator suspended to kill.
+      if (parsed.data.status === 'suspended') await revokeAllSessions(id);
+      return reply.send({ user });
     } catch (e) { return fail(reply, e); }
   });
 
@@ -75,6 +81,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'You cannot remove your own account. Ask another owner.' });
     }
     try {
+      // Sessions first, while the account still exists to look them up by.
+      await revokeAllSessions(id);
       const { tokensRevoked } = await deleteUser(id);
       // The count is worth returning: "removed, and 3 of their API tokens stopped working" is the
       // answer to the question an operator is actually asking when they offboard someone.

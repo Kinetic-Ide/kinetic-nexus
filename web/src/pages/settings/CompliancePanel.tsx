@@ -67,6 +67,7 @@ function ComplianceForm({ data, ctx }: { data: ComplianceConfig; ctx: SaveCtx<Co
       <SaveBar
         ctx={ctx}
         dirty={dirty}
+        requires="owner"
         onSave={() => ctx.save({
           auditRetentionDays: auditDays, usageRetentionDays: usageDays,
           notificationRetentionDays: notifDays, anonymizeUsage: anon,

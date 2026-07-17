@@ -67,6 +67,20 @@ describe('Caching — control (relocated from Settings)', () => {
     await waitFor(() => expect(put).toHaveBeenCalledWith('/admin/settings/cache', { enabled: true, ttlSeconds: 3600 }));
   });
 
+  it('refetches the stats after a save, so the on/off badge flips without a reload (7.13b)', async () => {
+    // The header badge reads /admin/cache/stats — a different request from the one the toggle
+    // writes. Purge always refreshed it; the toggle never did, leaving a stale badge.
+    put.mockResolvedValue({ enabled: true, ttlSeconds: 3600 });
+    render(<Caching />);
+    await waitFor(() => expect(screen.getByRole('switch', { name: /serve repeat requests/i })).toBeInTheDocument());
+    const before = statsCalls();
+
+    fireEvent.click(screen.getByRole('switch', { name: /serve repeat requests/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(statsCalls()).toBeGreaterThan(before));
+  });
+
   it('cannot be saved until something actually changed', async () => {
     render(<Caching />);
     await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled());
@@ -111,5 +125,15 @@ describe('Caching — purge', () => {
     render(<Caching />);
     await waitFor(() => expect(screen.getByRole('button', { name: /purge cache/i })).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /purge cache/i })).toBeDisabled();
+  });
+
+  it('offers a VIEWER the stats but neither the toggle save nor the purge (7.13b)', async () => {
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'viewer', userId: 'u9', name: 'V' }));
+    render(<Caching />);
+    await waitFor(() => expect(screen.getAllByText(/hit rate/i).length).toBeGreaterThan(0));
+
+    expect(screen.queryByRole('button', { name: /purge cache/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/read-only access/i).length).toBeGreaterThan(0);
   });
 });

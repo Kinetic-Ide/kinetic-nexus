@@ -39,4 +39,19 @@ describe('Nexus', () => {
     expect(screen.getByText('sk-…1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument();
   });
+
+  it('shows a viewer the pools with no way to touch them (7.13b)', () => {
+    sessionStorage.setItem('nx_identity', JSON.stringify({ role: 'viewer', userId: 'u9', name: 'V' }));
+    useApi.mockReturnValue({ data: sample, loading: false, error: null, reload: vi.fn() });
+    render(<Nexus />);
+    // The pool and its key health are still there to read…
+    expect(screen.getByText('OpenAI Prod')).toBeInTheDocument();
+    expect(screen.getByText('sk-…1')).toBeInTheDocument();
+    // …but nothing that would change them: no add-provider, no per-pool or per-key actions.
+    expect(screen.queryByRole('button', { name: /add provider/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /edit pool/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove pool/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
 });
