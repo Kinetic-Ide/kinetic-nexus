@@ -557,6 +557,10 @@ export interface HealthOverview {
 // to send. What is left is the hint and whether one is set.
 export interface GatewayConfig {
   baseUrl: string;
+  /** Which authority produced baseUrl (P7.14): the PUBLIC_URL pin, the proxy's forwarded
+   *  headers, or a bare Host-header guess. The Connect page uses this to explain itself
+   *  when the browser's own address bar disagrees. */
+  baseUrlSource: 'env' | 'proxy' | 'host';
   apiKeySet: boolean;
   apiKeyMasked: string | null;
   isFirstRun: boolean;

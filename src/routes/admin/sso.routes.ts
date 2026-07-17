@@ -21,7 +21,7 @@
 import { FastifyInstance } from 'fastify';
 import { z }               from 'zod';
 import * as sso            from '../../services/sso.service';
-import { buildOrigin }     from '../../lib/baseUrl';
+import { resolvePublicOrigin } from '../../lib/baseUrl';
 import { recordAudit }     from '../../services/audit.service';
 import { adminGuard, adminOwnerGuard } from './guard';
 import { AUTH_RATE_LIMIT, rateLimited } from '../../lib/routeRateLimits';
@@ -38,9 +38,12 @@ const configSchema = z.object({
   ownerValue:   z.string().max(200).default(''),
 });
 
-/** Absolute callback URL for this request's public origin — must match what the IdP has. */
+/** Absolute callback URL for this deployment's public origin — must match what the IdP has.
+ *  Honors a PUBLIC_URL pin (P7.14): an IdP compares redirect_uri byte-for-byte, and behind a
+ *  proxy that omits X-Forwarded-Proto the inferred http:// would never match the registered
+ *  https:// — the exact class of mismatch the pin exists to end. */
 function callbackUri(request: { host: string; headers: Record<string, unknown> }): string {
-  const origin = buildOrigin({
+  const { origin } = resolvePublicOrigin({
     host:           request.host,
     forwardedProto: request.headers['x-forwarded-proto'] as string | undefined,
     forwardedHost:  request.headers['x-forwarded-host']  as string | undefined,

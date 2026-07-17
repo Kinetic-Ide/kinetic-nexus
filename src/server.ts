@@ -37,6 +37,7 @@ import { metricsText, metricsContentType } from './lib/metrics';
 import { verifyMetricsToken } from './middleware/auth.middleware';
 import { assertDependencies, StartupCheckError } from './services/preflight.service';
 import { isSpaNavigation } from './lib/spaFallback';
+import { normalizePublicUrl } from './lib/baseUrl';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -53,6 +54,19 @@ const ABUSE_RATE_LIMIT_WINDOW = process.env.ABUSE_RATE_LIMIT_WINDOW ?? '1 minute
 async function bootstrap() {
   // Fail with an instruction, not a retry storm, when Postgres or Redis is missing.
   await assertDependencies();
+
+  // PUBLIC_URL (P7.14): the operator's pin for every URL the gateway prints — the Connect page,
+  // quick-start snippets, the SSO redirect_uri. Validated at boot and fatal when malformed: a bad
+  // pin would misprint every one of those with total confidence, which is strictly worse than
+  // crashing with the reason. Unset means inference from proxy headers stays in charge.
+  if (process.env.PUBLIC_URL?.trim()) {
+    try {
+      console.log(`  Public URL pinned → ${normalizePublicUrl(process.env.PUBLIC_URL)}`);
+    } catch (err) {
+      console.error(`\n✗ ${err instanceof Error ? err.message : err}\n`);
+      process.exit(1);
+    }
+  }
 
   // Phase 6.1 transition: seed the model registry from any pool that still carries a
   // preferred model, so routing behaves exactly as before the model-first switch.

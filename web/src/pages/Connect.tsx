@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import type { GatewayConfig } from '../api';
 import { QuickStart } from './connect/QuickStart';
 import { ApiKeyPanel } from './connect/ApiKeyPanel';
+import { OriginTruth, judgeOrigin } from './connect/OriginTruth';
 import s from './pages.module.css';
 
 interface Endpoint { method: string; path: string; purpose: string; }
@@ -56,8 +57,12 @@ export function Connect() {
   // works". Wrong since the P7.9 cutover; found by live-testing P7.13a against a real gateway. The
   // unit test never caught it because its fixture passes a base URL with no /v1, which no real
   // deployment ever sends.
-  const apiBaseUrl = data.baseUrl.replace(/\/+$/, '');          // …/v1 — for an SDK's base_url
-  const origin     = apiBaseUrl.replace(/\/v1$/, '');            // …    — for paths that carry their own /v1
+  const serverOrigin  = data.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+  // P7.14: the server's origin is a claim; the address bar is a witness. judgeOrigin picks which
+  // one every copyable value uses, and OriginTruth explains the verdict beneath the Base URL.
+  const browserOrigin = window.location.origin;
+  const origin        = judgeOrigin(serverOrigin, data.baseUrlSource, browserOrigin).origin;
+  const apiBaseUrl    = `${origin}/v1`;                          // …/v1 — for an SDK's base_url
 
   const endpointCols: Column<Endpoint>[] = [
     { key: 'purpose', label: 'Purpose' },
@@ -74,6 +79,7 @@ export function Connect() {
           <div class={s.connFields}>
             <CopyField label="Base URL" value={apiBaseUrl} />
           </div>
+          <OriginTruth serverOrigin={serverOrigin} source={data.baseUrlSource} browserOrigin={browserOrigin} />
           <ApiKeyPanel apiKeySet={data.apiKeySet} apiKeyMasked={data.apiKeyMasked} onRotated={reload} />
           <div class={s.rulesNote}>
             <ShieldAlert size={13} /> Treat the API key like a password — anyone with it can spend against your providers.

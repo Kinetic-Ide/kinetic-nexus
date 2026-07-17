@@ -17,7 +17,7 @@
 // Dashboard config, health, API-key management, routing status, cache bust.
 import { FastifyInstance }      from 'fastify';
 import { REGISTRY_CACHE_KEY }  from '../../lib/registryCacheKey';
-import { buildBaseUrl }        from '../../lib/baseUrl';
+import { resolvePublicOrigin } from '../../lib/baseUrl';
 import { getApiKeyInfo, rotateApiKey } from '../../services/apiKey.service';
 import { prisma }              from '../../lib/prisma';
 import { redis }               from '../../lib/redis';
@@ -30,7 +30,10 @@ export default async function adminSystemRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/config', adminGuard, async (request, reply) => {
     const { set, masked } = await getApiKeyInfo();
     const providers = await prisma.nexusProvider.count();
-    const baseUrl   = buildBaseUrl({
+    // P7.14: the origin comes with its provenance — a PUBLIC_URL pin, the proxy's forwarded
+    // headers, or the bare Host guess. The dashboard cross-checks it against the browser's own
+    // address bar and needs to know WHICH authority spoke to explain a disagreement usefully.
+    const { origin, source } = resolvePublicOrigin({
       host:           request.host, // NOT request.hostname — v5 strips the port
       forwardedProto: request.headers['x-forwarded-proto'],
       forwardedHost:  request.headers['x-forwarded-host'],
@@ -38,7 +41,7 @@ export default async function adminSystemRoutes(fastify: FastifyInstance) {
     // `nexusApiKey` is deliberately gone (Phase 7.13a): the key is hashed at rest, so there is
     // nothing to send. The dashboard shows the hint and offers a rotation instead of a copy button
     // that would need a readable secret behind it.
-    return reply.send({ baseUrl, apiKeySet: set, apiKeyMasked: masked, isFirstRun: providers === 0 });
+    return reply.send({ baseUrl: `${origin}/v1`, baseUrlSource: source, apiKeySet: set, apiKeyMasked: masked, isFirstRun: providers === 0 });
   });
 
   // ── Setup / health ────────────────────────────────────────────────

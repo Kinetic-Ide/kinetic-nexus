@@ -71,3 +71,59 @@ describe('buildBaseUrl', () => {
     expect(buildBaseUrl({ host: '[::1]:3000' })).toBe('http://[::1]:3000/v1');
   });
 });
+
+// ── P7.14: the PUBLIC_URL pin and its provenance ────────────────────────────────
+
+import { normalizePublicUrl, resolvePublicOrigin } from './baseUrl';
+import { beforeEach, afterEach, vi } from 'vitest';
+
+describe('normalizePublicUrl', () => {
+  it('accepts a clean origin and returns it bare', () => {
+    expect(normalizePublicUrl('https://gateway.acme.com')).toBe('https://gateway.acme.com');
+  });
+
+  it('keeps a non-default port — dropping it is the classic broken-client bug', () => {
+    expect(normalizePublicUrl('http://10.0.0.5:3000')).toBe('http://10.0.0.5:3000');
+  });
+
+  it.each([
+    ['https://gateway.acme.com/',   'a trailing slash'],
+    ['https://gateway.acme.com/v1', 'an included /v1 — people paste the Connect value'],
+    ['https://gateway.acme.com/v1/', 'a /v1 with trailing slash'],
+    ['  https://gateway.acme.com ', 'surrounding whitespace'],
+  ])('forgives %s (%s)', (raw) => {
+    expect(normalizePublicUrl(raw)).toBe('https://gateway.acme.com');
+  });
+
+  it.each([
+    ['not a url at all'],
+    ['ftp://gateway.acme.com'],
+    ['https://gateway.acme.com/api'],
+    ['https://user:pw@gateway.acme.com'],
+    ['https://gateway.acme.com/?x=1'],
+  ])('refuses %s with a reason instead of misprinting every URL', (raw) => {
+    expect(() => normalizePublicUrl(raw)).toThrow(/PUBLIC_URL/);
+  });
+});
+
+describe('resolvePublicOrigin — who gets to say what the public address is', () => {
+  const req = { host: 'nexus:3000', forwardedProto: 'https', forwardedHost: 'gateway.acme.com' };
+
+  beforeEach(() => vi.stubEnv('PUBLIC_URL', ''));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('the operator pin wins over everything, and says so', () => {
+    vi.stubEnv('PUBLIC_URL', 'https://pinned.acme.com/v1');
+    expect(resolvePublicOrigin(req)).toEqual({ origin: 'https://pinned.acme.com', source: 'env' });
+  });
+
+  it('proxy headers speak when there is no pin', () => {
+    expect(resolvePublicOrigin(req)).toEqual({ origin: 'https://gateway.acme.com', source: 'proxy' });
+  });
+
+  it('a bare Host header is the last resort, and admits it', () => {
+    // This is the known hole: no pin, no forwarded headers — scheme is an http guess.
+    expect(resolvePublicOrigin({ host: 'localhost:3000' }))
+      .toEqual({ origin: 'http://localhost:3000', source: 'host' });
+  });
+});

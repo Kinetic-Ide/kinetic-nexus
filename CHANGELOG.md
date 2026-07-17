@@ -10,6 +10,19 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 ## [Unreleased]
 
 ### Added
+- **Public URL truth (Phase 7.14).** The gateway can now be told its public address instead of
+  having to guess it. A new `PUBLIC_URL` environment variable pins the origin every printed URL
+  uses — the Connect page, quick-start snippets, and the SSO `redirect_uri` — and outranks both
+  the proxy's `X-Forwarded-Proto`/`X-Forwarded-Host` headers and the Host-header fallback
+  (forged forwarded headers cannot dislodge it; a malformed pin fails the boot with the reason
+  rather than misprinting every URL). Without a pin, inference works as before but now carries
+  its **provenance**, and the dashboard's Connect page cross-checks the server's claim against
+  the browser's own address bar — the one witness that cannot be wrong about the scheme, since
+  the dashboard is served same-origin. Agreement is confirmed and its authority named; a pinned
+  address that differs from where you're browsing is explained; a *contradicted guess* (the
+  classic case: a proxy that forwards `Host` but omits `X-Forwarded-Proto`, so a TLS deployment
+  prints `http://`) is overruled — every copyable value follows the address bar, and a warning
+  names the two permanent fixes.
 - **Sessions, role-gated UI, and the factory reset (Phase 7.13b).** Every sign-in is now a
   session a person can see and end: **Admin → My account → "Where you're signed in"** lists each
   live session with the browser it claimed ("Chrome on Windows"), its IP, when it signed in and

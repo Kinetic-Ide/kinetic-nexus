@@ -67,6 +67,14 @@ test('the topbar names the person, their role, and a LIVE pill that actually pol
   await expect(page.getByText('Owner', { exact: true })).toBeVisible();
 });
 
+test('the Connect page verifies its address against this very browser (P7.14)', async () => {
+  // This stack has no PUBLIC_URL pin and no proxy: the server infers its address from the Host
+  // header, and this browser reached it at exactly that address — the page must say so.
+  await page.goto('/connect');
+  await expect(page.getByText(/Address verified/)).toBeVisible();
+  await expect(page.getByText(/inferred from the request/)).toBeVisible();
+});
+
 test('the sessions panel shows this device, and sign-out-everywhere spares it', async () => {
   await page.goto('/admin');
   await page.getByRole('tab', { name: 'My account' }).click();

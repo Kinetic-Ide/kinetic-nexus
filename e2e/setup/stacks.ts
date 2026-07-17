@@ -50,6 +50,10 @@ export interface Stack {
   redisUrl: string;
 }
 
+/** The PUBLIC_URL pinned on the API stack (P7.14) — a value inference could never produce
+ *  from a loopback request, so a spec seeing it back PROVES the pin outranks the headers. */
+export const API_STACK_PUBLIC_URL = 'https://pinned.e2e.alayra.com';
+
 export const STACKS: Stack[] = [
   {
     name: 'api',
@@ -87,5 +91,8 @@ export function gatewayEnv(s: Stack): NodeJS.ProcessEnv {
     // A real deployment knob (Settings → Network), not a test hook: the mock provider
     // lives on loopback, which the SSRF guard rightly blocks by default.
     SSRF_ALLOWLIST:        '127.0.0.1',
+    // P7.14: pin the API stack's public URL; the UI stack stays on inference so the
+    // browser story exercises the OTHER half (address-bar agreement on a direct host).
+    ...(s.name === 'api' ? { PUBLIC_URL: API_STACK_PUBLIC_URL } : {}),
   };
 }
