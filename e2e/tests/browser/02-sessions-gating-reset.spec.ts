@@ -63,8 +63,12 @@ test('the topbar names the person, their role, and a LIVE pill that actually pol
   // gateway was up: a hardcoded word and a placeholder name.
   // exact: the Overview behind it also says "Live" in its status card.
   await expect(page.getByText('LIVE', { exact: true })).toBeVisible();
-  await expect(page.getByText(OWNER.name)).toBeVisible();
-  await expect(page.getByText('Owner', { exact: true })).toBeVisible();
+  // Scope the name to the topbar (banner): since 7.15c the owner's name also appears in every
+  // Recent Activity row they acted in, so a whole-page getByText(name) is now ambiguous — which
+  // is exactly the feature working. The topbar is what this test is actually about.
+  const topbar = page.getByRole('banner');
+  await expect(topbar.getByText(OWNER.name)).toBeVisible();
+  await expect(topbar.getByText('Owner', { exact: true })).toBeVisible();
 });
 
 test('the Connect page verifies its address against this very browser (P7.14)', async () => {
