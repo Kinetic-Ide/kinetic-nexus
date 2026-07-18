@@ -9,6 +9,13 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
 ## [Unreleased]
 
+### Fixed
+- **The Overview's Recent Activity now names the person, not just their role (Phase 7.15c).** Accounts
+  landed in 7.13a and the audit trail has recorded names ever since — the Logs page shows them — but
+  the Overview's activity panel still displayed only "owner" / "viewer". The name now leads with the
+  role beside it, the same shape the Logs page uses; a bare role (no name) still means a token-minted
+  or pre-accounts action, as before.
+
 ### Added
 - **A real QR code for two-factor setup, and downloads for the one-time secrets (Phase 7.15b).**
   Enrolling in two-factor now shows a **scannable QR code** — drawn as inline SVG from the secret

@@ -14,7 +14,7 @@ const sample: OverviewData = {
   series7d: Array.from({ length: 7 }, (_, i) => ({ date: `2026-07-0${i + 1}`, inputTokens: i, outputTokens: i, tokens: i * 2, usd: i, requests: i })),
   topModels: [{ model: 'gpt-4o', tokens: 100, usd: 1 }],
   topKeys: [{ id: 'k1', name: 'Alpha', totalTokens: 100, requests: 5, estimatedUsd: 1 }],
-  recentLogs: [{ id: 'a1', action: 'keys.create', method: 'POST', actorRole: 'owner', status: 200, target: null, createdAt: '2026-07-11T10:00:00Z' }],
+  recentLogs: [{ id: 'a1', action: 'keys.create', method: 'POST', actorRole: 'owner', actorName: 'Ada', status: 200, target: null, createdAt: '2026-07-11T10:00:00Z' }],
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -41,6 +41,7 @@ describe('Overview', () => {
     expect(screen.getByText('gpt-4o')).toBeInTheDocument();        // top model
     expect(screen.getByText('Alpha')).toBeInTheDocument();         // top key
     expect(screen.getByText(/keys\.create/)).toBeInTheDocument();  // recent activity
+    expect(screen.getByText('Ada')).toBeInTheDocument();           // the actor's NAME, not just their role
     expect(screen.getByRole('img', { name: 'Cost over the last 7 days' })).toBeInTheDocument();
   });
 

@@ -58,7 +58,7 @@ beforeEach(() => {
     { id: 'k1', name: 'Alpha', totalTokens: 100, requests: 5, estimatedUsd: 1.0, inputTokens: 0, outputTokens: 0 },
   ]);
   queryAuditLogs.mockResolvedValue([
-    { id: 'a1', action: 'keys.create', method: 'POST', actorRole: 'owner', status: 200, target: null, createdAt: new Date('2026-07-11T10:00:00Z') },
+    { id: 'a1', action: 'keys.create', method: 'POST', actorRole: 'owner', actorName: 'Ada', status: 200, target: null, createdAt: new Date('2026-07-11T10:00:00Z') },
   ]);
   getModelRegistry.mockResolvedValue([{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }]);
   prismaMock.tokenUsage.aggregate.mockResolvedValue({ _count: { _all: 42 }, _sum: { estimatedUsd: 7.25 } });
@@ -103,5 +103,6 @@ describe('getOverview', () => {
     expect(out.topModels.map((m) => m.model)).toEqual(['gpt-4o', 'haiku']);
     expect(out.topKeys[0]).toMatchObject({ id: 'k1', name: 'Alpha', totalTokens: 100 });
     expect(out.recentLogs[0].createdAt).toBe('2026-07-11T10:00:00.000Z');
+  expect(out.recentLogs[0].actorName).toBe('Ada'); // the name rides through, not just the role
   });
 });

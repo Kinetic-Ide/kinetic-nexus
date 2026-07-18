@@ -256,7 +256,7 @@ export interface Overview {
   series7d:   OverviewDay[];
   topModels:  { model: string; tokens: number; usd: number }[];
   topKeys:    { id: string; name: string; totalTokens: number; requests: number; estimatedUsd: number }[];
-  recentLogs: { id: string; action: string; method: string; actorRole: string; status: number; target: string | null; createdAt: string }[];
+  recentLogs: { id: string; action: string; method: string; actorRole: string; actorName: string | null; status: number; target: string | null; createdAt: string }[];
 }
 
 // Mirrors GET /admin/nexus/overview (nexusOverview.service.ts).

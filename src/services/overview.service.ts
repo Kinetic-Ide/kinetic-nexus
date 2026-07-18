@@ -49,7 +49,7 @@ export interface OverviewPayload {
   series7d:   OverviewDay[];
   topModels:  { model: string; tokens: number; usd: number }[];
   topKeys:    { id: string; name: string; totalTokens: number; requests: number; estimatedUsd: number }[];
-  recentLogs: { id: string; action: string; method: string; actorRole: string; status: number; target: string | null; createdAt: string }[];
+  recentLogs: { id: string; action: string; method: string; actorRole: string; actorName: string | null; status: number; target: string | null; createdAt: string }[];
 }
 
 /** Project the (gap-prone) day buckets onto a full week, filling absent days with zeros. */
@@ -95,7 +95,7 @@ export async function getOverview(now = new Date()): Promise<OverviewPayload> {
       id: k.id, name: k.name, totalTokens: k.totalTokens, requests: k.requests, estimatedUsd: k.estimatedUsd,
     })),
     recentLogs: logs.map((l) => ({
-      id: l.id, action: l.action, method: l.method, actorRole: l.actorRole,
+      id: l.id, action: l.action, method: l.method, actorRole: l.actorRole, actorName: l.actorName,
       status: l.status, target: l.target, createdAt: l.createdAt.toISOString(),
     })),
   };
