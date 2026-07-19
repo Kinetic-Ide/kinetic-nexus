@@ -1,14 +1,16 @@
 import { useState } from 'preact/hooks';
-import { Search, Eye, EyeOff, X } from 'lucide-preact';
-import { POST, ApiError, fetchProviderModels } from '../../api';
-import { addModelsToRegistry } from '../../lib/registry';
+import { Search, Eye, EyeOff } from 'lucide-preact';
+import { POST, ApiError, fetchProviderModels, type FetchedModel } from '../../api';
+import { addModelsToRegistry, type RegistryModelInput } from '../../lib/registry';
 import { Modal, Field, Input, FieldRow, Button, FormError, FormNote } from '../../ui';
+import { ModelPicker } from './ModelPicker';
 import s from '../pages.module.css';
 
 // Add a credential to a pool. Mirrors POST /admin/providers/:providerId/keys, and — the P7.4b piece
 // — carries the model-discovery flow: "Fetch Models" calls the provider live with the entered key,
-// the operator prunes the returned list, and on save the kept models are written into the registry
-// for this provider. The key joins the shared pool; per-team ownership (BYOK) is set from Teams.
+// the operator picks the models to enable (opt-in, searchable — P7.16), and on save the selected
+// models join the registry with any pricing the provider's listing volunteered. The key joins the
+// shared pool; per-team ownership (BYOK) is set from Teams.
 export function AddKeyDialog({
   providerId, providerName, provider, tier, onClose, onChanged,
 }: {
@@ -21,7 +23,9 @@ export function AddKeyDialog({
   const [rpm, setRpm]         = useState('60');
   const [tpm, setTpm]         = useState('100000');
   const [maxUsers, setMaxUsers] = useState('1000');
-  const [models, setModels]   = useState<string[]>([]);
+  const [fetched, setFetched]   = useState<FetchedModel[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [fetchGen, setFetchGen] = useState(0); // keys the picker so every fetch mounts it fresh
   const [fetching, setFetching] = useState(false);
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -34,8 +38,13 @@ export function AddKeyDialog({
     setError(null);
     try {
       const r = await fetchProviderModels(providerId, apiKey.trim());
-      if (r.models.length) setModels(r.models);
-      else setError('No models returned for this key.');
+      if (r.models.length) {
+        setFetched(r.models);
+        setSelected([]); // a re-fetch (new key, new provider state) must not carry stale picks
+        setFetchGen((g) => g + 1); // remount the picker: search and expand state reset too
+      } else {
+        setError('No models returned for this key.');
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not fetch models.');
     } finally {
@@ -56,7 +65,21 @@ export function AddKeyDialog({
         tpmLimit: Math.max(1, parseInt(tpm, 10) || 100000),
         maxUsers: Math.max(1, parseInt(maxUsers, 10) || 1000),
       });
-      if (models.length) await addModelsToRegistry(provider, tier, models);
+      if (selected.length) {
+        // Carry each picked model's harvested pricing/context into the registry entry.
+        const byId = new Map(fetched.map((m) => [m.id, m]));
+        const inputs: RegistryModelInput[] = selected.map((id) => {
+          const m = byId.get(id);
+          return {
+            modelString: id,
+            displayName: m?.name,
+            inputCostPer1M: m?.inputCostPer1M,
+            outputCostPer1M: m?.outputCostPer1M,
+            contextWindow: m?.contextWindow,
+          };
+        });
+        await addModelsToRegistry(provider, tier, inputs);
+      }
       onChanged();
       onClose();
     } catch (err) {
@@ -101,16 +124,12 @@ export function AddKeyDialog({
           </div>
         </Field>
 
-        {models.length > 0 && (
-          <Field label={`Models (${models.length})`} hint="× to drop before saving">
-            <div class={s.modelChips}>
-              {models.map((m) => (
-                <span key={m} class={s.modelChip}>
-                  <span>{m}</span>
-                  <button type="button" onClick={() => setModels((prev) => prev.filter((x) => x !== m))} aria-label={`Remove ${m}`}><X size={11} /></button>
-                </span>
-              ))}
-            </div>
+        {fetched.length > 0 && (
+          <Field
+            label={`Models (${selected.length}/${fetched.length} selected)`}
+            hint="click to select — only selected models join the registry"
+          >
+            <ModelPicker key={fetchGen} models={fetched} selected={selected} onChange={setSelected} />
           </Field>
         )}
 

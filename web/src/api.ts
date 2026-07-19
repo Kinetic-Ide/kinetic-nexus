@@ -290,6 +290,16 @@ export interface AiModel {
 }
 export interface ModelsResponse { models: AiModel[]; capabilities: string[]; }
 
+// Mirrors src/lib/modelPath.ts FetchedModel — one model from a provider's live /models listing,
+// with whatever pricing/context metadata the response volunteered (already converted to per-1M).
+export interface FetchedModel {
+  id: string;
+  name?: string;
+  inputCostPer1M?: number;
+  outputCostPer1M?: number;
+  contextWindow?: number;
+}
+
 // Mirrors GET /admin/models/pricing-catalog (pricingCatalog.service.ts) — indicative auto-fill data.
 export interface PricingCatalogEntry {
   match: string; provider: string; displayName: string; capabilities: string[];
@@ -619,6 +629,7 @@ export const PUT   = <T = unknown>(p: string, b?: unknown) => api<T>('PUT', p, b
 export const PATCH = <T = unknown>(p: string, b?: unknown) => api<T>('PATCH', p, b);
 export const DEL   = <T = unknown>(p: string) => api<T>('DELETE', p);
 
-/** Fetch a provider's live model list (P7.4b). `plainKey` probes before a key is saved. */
+/** Fetch a provider's live model list (P7.4b). `plainKey` probes before a key is saved.
+ *  Since P7.16 each entry carries harvested pricing/context metadata, not just the id. */
 export const fetchProviderModels = (providerId: string, plainKey?: string) =>
-  POST<{ models: string[] }>(`/admin/providers/${providerId}/fetch-models`, plainKey ? { plainKey } : {});
+  POST<{ models: FetchedModel[] }>(`/admin/providers/${providerId}/fetch-models`, plainKey ? { plainKey } : {});

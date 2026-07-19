@@ -25,7 +25,7 @@ import { getModelRegistry, activeProviderSlugs }  from './model.service';
 import { selectModels, type SelectableModel, type Capability } from '../lib/modelSelect';
 import { stripTrailingSlash, assertSafeUrl } from '../lib/url';
 import { safeFetch }        from '../lib/safeFetch';
-import { extractModelIds }   from '../lib/modelPath';
+import { extractModelMeta, type FetchedModel } from '../lib/modelPath';
 import { withExtraHeaders, providerAuthHeader } from '../lib/providerHeaders';
 import { getSsrfPolicy }     from './ssrf.service';
 import { SHARED_NAMESPACE, type RoutingScope } from '../lib/scope';
@@ -596,7 +596,7 @@ const MAX_FETCHED_MODELS = 500;
 export async function fetchProviderModels(
   providerId: string,
   plainKey?: string,
-): Promise<{ ok: boolean; models: string[]; error?: string }> {
+): Promise<{ ok: boolean; models: FetchedModel[]; error?: string }> {
   const provider = await prisma.nexusProvider.findUnique({
     where:   { id: providerId },
     include: { keys: { where: { status: 'active' }, take: 1, orderBy: { lastUsedAt: 'asc' } } },
@@ -623,7 +623,7 @@ export async function fetchProviderModels(
     });
     if (!res.ok) return { ok: false, models: [], error: `HTTP ${res.status}` };
     const json   = await res.json().catch(() => null);
-    const models = extractModelIds(json, provider.modelIdPath).slice(0, MAX_FETCHED_MODELS);
+    const models = extractModelMeta(json, provider.modelIdPath).slice(0, MAX_FETCHED_MODELS);
     if (!models.length) return { ok: false, models: [], error: 'No models found at the configured model-id path' };
     return { ok: true, models };
   } catch (err) {

@@ -9,6 +9,19 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
 ## [Unreleased]
 
+### Changed
+- **The model picker is opt-in, searchable, and harvests real pricing (Phase 7.16a).** Fetching a
+  provider's models used to dump every one of them — 339, for OpenRouter — into the selection as
+  removable chips, and threw away the pricing data in the very same response, so registry entries
+  were born unpriced and every request costed "$0". Both halves are fixed. The fetch now keeps each
+  model's **per-token pricing** (converted to USD per 1M tokens), context window, and display name;
+  saving selected models writes those prices into the registry, and a re-fetch refreshes stored
+  prices without ever letting an unpriced listing zero out values an operator set by hand. The
+  dialog now shows a **searchable, opt-in picker**: nothing is selected until you say so, search
+  narrows by id and name ("4o mini" finds `gpt-4o-mini`), each row shows its price and context
+  window, "Select all shown" works on the filtered set, and the selection reads back as a compact
+  strip — four chips, then "+N more" that expands on click.
+
 ### Fixed
 - **The Overview's Recent Activity now names the person, not just their role (Phase 7.15c).** Accounts
   landed in 7.13a and the audit trail has recorded names ever since — the Logs page shows them — but
