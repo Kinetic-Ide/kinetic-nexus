@@ -34,13 +34,19 @@ with full usage analytics and cost tracking built in.
 
 <br>
 
+<img src="./docs/assets/dashboard-overview.png" alt="The Alayra Nexus overview — request volume, token and cost trends, top models, and the audit trail" width="100%"/>
+
+<sub>The overview after 90 days of traffic across five teams and ten models.</sub>
+
+<br>
+
 </div>
 
 ---
 
 ## Contents
 
-**Get started** · [Why Alayra Nexus?](#why-alayra-nexus) · [Features](#features) · [Supported providers](#supported-providers) · [Architecture](#architecture) · [Quick start](#quick-start) · [Connect your tools](#connect-your-tools) · [Environment variables](#environment-variables)
+**Get started** · [Why Alayra Nexus?](#why-alayra-nexus) · [Features](#features) · [Screens](#screens) · [How it compares](#how-it-compares) · [Supported providers](#supported-providers) · [Architecture](#architecture) · [Quick start](#quick-start) · [Connect your tools](#connect-your-tools) · [Environment variables](#environment-variables)
 
 **How it works** · [Rate limits, explained](#rate-limits-explained) · [Resilience & routing](#resilience--routing) · [Teams & budgets](#teams--budgets) · [BYOK](#byok--bring-your-own-key) · [API reference](#api-reference) · [Dashboard](#dashboard) · [Observability](#observability)
 
@@ -86,6 +92,106 @@ Alayra Nexus is the infrastructure layer that sits between your application and 
 | **Web Admin Dashboard** | Full browser UI — no CLI required for day-to-day operations |
 | **Two-Factor Admin Auth** | Optional TOTP second factor with single-use recovery codes, session tokens, per-source login lockout, and revocable API tokens for scripts |
 | **Security Hardened** | Fastify Helmet, CORS, constant-time secret comparison, AES-256-GCM key encryption, zero plaintext secrets at rest |
+
+---
+
+## Screens
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="./docs/assets/dashboard-analytics.png" alt="Analytics — success rate, latency percentiles, spend, cache savings, and a per-provider breakdown"/>
+
+**Analytics** — reliability, speed, spend and savings over any window, with a
+per-model and per-provider breakdown and a plain-English account of what failed.
+
+</td>
+<td width="50%">
+
+<img src="./docs/assets/dashboard-teams.png" alt="Team detail — budget consumption, per-key spend share, and busiest models"/>
+
+**Teams** — each team's budget against its cap, what every access key inside it
+spent, and the models it leans on.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="./docs/assets/dashboard-nexus.png" alt="Provider pools grouped by routing tier, each key showing its limits and status"/>
+
+**Pools & routing** — provider pools by tier, every key with its own limits,
+status and controls: test, cool, ban.
+
+</td>
+<td width="50%">
+
+<img src="./docs/assets/dashboard-logs.png" alt="The audit trail — every state-changing action with actor, role, target, result and source IP"/>
+
+**Audit trail** — every state-changing action with who did it, from where, and
+what the server answered. Read-only over the API.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="./docs/assets/dashboard-add-provider.png" alt="The add-provider dialog, covering base URL, auth header, model id path and extra headers"/>
+
+**Any OpenAI-compatible endpoint** — base URL, auth header, model-id path and
+per-provider headers, without touching a config file.
+
+</td>
+<td width="50%">
+
+<img src="./docs/assets/health.png" alt="The health page — live probes for Redis, Postgres and provider reachability"/>
+
+**Health** — live probes for every dependency, so an outage names itself
+instead of arriving as a wall of failed requests.
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+<img src="./docs/assets/dashboard-mobile.png" alt="The dashboard on a phone, with the navigation drawer open" width="300"/>
+
+<sub>The console works on a phone — the sidebar becomes a drawer below 820px.</sub>
+</div>
+
+---
+
+## How it compares
+
+[LiteLLM](https://github.com/BerriAI/litellm) is the closest well-known project, so
+here is an honest side-by-side. It wins on reach and ecosystem; Nexus wins on what
+you get without paying, and on depth of the operator console.
+
+| | Alayra Nexus | LiteLLM |
+|---|---|---|
+| **Providers** | 5 first-class + any OpenAI-compatible endpoint | **100+ built in** |
+| **Admin dashboard** | Built in — analytics, teams, pools, audit, health | Built in |
+| **Scoped team keys** | Yes | Yes (virtual keys) |
+| **Team budgets** | Yes, with block / notify / downgrade at the cap | Yes |
+| **Key pooling & failover** | Per-provider pools, tiered failover, circuit breaker | Load balancing, retries, fallbacks |
+| **Audit trail** | Append-only, per-action, no delete endpoint | Logging integrations |
+| **SSO** | **Included, Apache-2.0** | Commercial licence |
+| **Two-factor auth** | **Included** | — |
+| **CLI** | *Coming soon* | **Mature** |
+| **SDK** | *Not yet* | **Python SDK** |
+| **Language** | TypeScript / Node | Python (Rust core) |
+| **Licence** | Apache-2.0, every feature included | Open source + commercial tier |
+
+**Choose LiteLLM** if you need breadth of providers today, a mature CLI and SDK, or
+its ecosystem of integrations.
+
+**Choose Alayra Nexus** if you want a self-hosted gateway whose enterprise controls —
+SSO, two-factor, audit trail, team budgets — are in the open-source licence rather
+than behind a sales call, and a console your finance team can read without help.
+
+<sub>Compared against LiteLLM's public documentation, July 2026. If anything here has
+gone out of date, please open an issue — we would rather fix it than win on a stale fact.</sub>
 
 ---
 
