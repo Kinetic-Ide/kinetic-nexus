@@ -1,6 +1,7 @@
 import { useLocation } from 'preact-iso';
 import { clsx } from 'clsx';
 import { SECTIONS, sectionByPath, type Section } from '../nav';
+import { href, appPath } from '../base';
 import { useBranding } from '../hooks/useBranding';
 import s from './shell.module.css';
 
@@ -8,7 +9,7 @@ function NavLink({ section, activeId }: { section: Section; activeId?: string })
   const Icon = section.icon;
   return (
     <a
-      href={section.path}
+      href={href(section.path)}
       class={clsx(s.navItem, activeId === section.id && s.navActive)}
       aria-current={activeId === section.id ? 'page' : undefined}
     >
@@ -20,7 +21,9 @@ function NavLink({ section, activeId }: { section: Section; activeId?: string })
 
 export function Sidebar({ open = false }: { open?: boolean }) {
   const { path } = useLocation();
-  const activeId = sectionByPath(path)?.id;
+  // The router hands back the raw pathname, which under a sub-path deployment still carries the
+  // mount prefix; strip it before matching so the active item highlights in the demo too.
+  const activeId = sectionByPath(appPath(path))?.id;
   const workspace = SECTIONS.filter((x) => x.group === 'workspace');
   const system = SECTIONS.filter((x) => x.group === 'system');
 
@@ -32,8 +35,8 @@ export function Sidebar({ open = false }: { open?: boolean }) {
 
   return (
     <aside class={clsx(s.sidebar, open && s.sidebarOpen)}>
-      <a href="/" class={s.brand} aria-label={`${name} — Overview`}>
-        <img class={s.brandMark} src={brand.logoDataUri || '/logo.svg'} width="26" height="26" alt="" />
+      <a href={href('/')} class={s.brand} aria-label={`${name} — Overview`}>
+        <img class={s.brandMark} src={brand.logoDataUri || href('/logo.svg')} width="26" height="26" alt="" />
         <span>
           <div class={s.brandText}>{name}</div>
           <div class={s.brandBy}>{brand.companyName ? 'Alayra Nexus' : 'by Alayra Systems'}</div>

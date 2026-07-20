@@ -4,6 +4,7 @@ import { LocationProvider, Router, Route } from 'preact-iso';
 import { AppShell } from './shell/AppShell';
 import { SECTIONS } from './nav';
 import { getToken } from './api';
+import { BASE, href } from './base';
 import { Login } from './pages/Login';
 import { Overview } from './pages/Overview';
 import { Nexus } from './pages/Nexus';
@@ -71,13 +72,16 @@ export function App() {
   if (!authed) return <Login onAuthed={() => setAuthed(true)} />;
 
   return (
-    <LocationProvider>
+    // `scope` keeps the router's click interception inside the mount point, and `href()` puts the
+    // mount prefix on each route pattern — preact-iso matches against the raw pathname and does not
+    // strip a base itself. Both are no-ops at the site root, which is every real deployment.
+    <LocationProvider scope={BASE || undefined}>
       <AppShell>
         <Router>
-          <Route path="/" component={Overview} />
+          <Route path={BASE || '/'} component={Overview} />
           {SECTIONS.filter((sec) => sec.id !== 'overview').map((sec) => {
             const Page = PAGES[sec.id];
-            return <Route key={sec.id} path={sec.path} component={Page ?? (() => <Placeholder section={sec} />)} />;
+            return <Route key={sec.id} path={href(sec.path)} component={Page ?? (() => <Placeholder section={sec} />)} />;
           })}
           <Route default component={NotFound} />
         </Router>
