@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generate, summarise, SEED_MODELS, SEED_TEAMS, type GenerateOptions } from './generator';
+import { generate, summarise, SEED_MODELS, SEED_TEAMS, SEED_ACTORS, type GenerateOptions } from './generator';
 
 const NOW = new Date('2026-07-20T12:00:00.000Z');
 const OPTS: GenerateOptions = { now: NOW, days: 14, seed: 42, peakRequestsPerDay: 300 };
@@ -127,6 +127,27 @@ describe('seed generator', () => {
       expect(f.actorName).toBe('');
       expect(f.actorRole).toBe('system');
     }
+  });
+
+  // The gateway refuses writes from a viewer, so an audit trail showing one would contradict the
+  // product's own role model in a screenshot.
+  it('never attributes a write action to a viewer', () => {
+    const viewerNames = new Set(SEED_ACTORS.filter((a) => a.role === 'viewer').map((a) => a.name));
+    const writeActions = /^(keys|teams|models|providers|settings)\./;
+
+    const audit = generate({ ...OPTS, days: 60 }).audit;
+    const writes = audit.filter((a) => writeActions.test(a.action));
+    expect(writes.length).toBeGreaterThan(0);
+
+    for (const row of writes) {
+      expect(row.actorRole).not.toBe('viewer');
+      expect(viewerNames.has(row.actorName)).toBe(false);
+    }
+  });
+
+  it('still lets a viewer sign in and out', () => {
+    const audit = generate({ ...OPTS, days: 60 }).audit;
+    expect(audit.some((a) => a.action.startsWith('auth.') && a.actorRole === 'viewer')).toBe(true);
   });
 
   it('returns audit entries newest first', () => {

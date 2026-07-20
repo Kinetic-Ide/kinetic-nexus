@@ -55,6 +55,10 @@ prisma/*.db-journal
 docs/*
 !docs/architecture/
 !docs/assets/
+# The built static demo. Committed on purpose: GitHub Pages publishes it straight from the default
+# branch, so the artefact has to be in the tree — and keeping it here means a fork gets the demo
+# without running a build. Rebuilt by `npm run build:demo` in web/.
+!docs/demo/
 
 # ── Misc ───────────────────────────────────────────────────────────────────────
 .claude/

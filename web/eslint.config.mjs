@@ -8,6 +8,14 @@ export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'coverage'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Build tooling runs in Node, not the browser: `process` and `console` are globals there, and
+  // linting it against browser globals reports both as undefined.
+  {
+    files: ['scripts/**/*.mjs', '*.config.{js,mjs,ts}'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

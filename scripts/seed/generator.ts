@@ -306,28 +306,38 @@ function generateUsage(rng: Rng, opts: GenerateOptions): GeneratedUsage[] {
   return rows;
 }
 
-const AUDIT_ACTIONS: readonly { action: string; method: string; status: number; weight: number }[] = [
-  { action: 'auth.login',            method: 'POST',   status: 200, weight: 26 },
-  { action: 'auth.logout',           method: 'POST',   status: 200, weight: 10 },
-  { action: 'keys.create',           method: 'POST',   status: 201, weight: 8  },
-  { action: 'keys.update',           method: 'PATCH',  status: 200, weight: 9  },
-  { action: 'keys.delete',           method: 'DELETE', status: 200, weight: 4  },
-  { action: 'teams.create',          method: 'POST',   status: 201, weight: 5  },
-  { action: 'teams.update',          method: 'PATCH',  status: 200, weight: 8  },
-  { action: 'models.update',         method: 'PUT',    status: 200, weight: 7  },
-  { action: 'models.delete',         method: 'DELETE', status: 200, weight: 3  },
-  { action: 'providers.create',      method: 'POST',   status: 201, weight: 4  },
-  { action: 'providers.fetch-models',method: 'POST',   status: 200, weight: 6  },
-  { action: 'settings.update',       method: 'PATCH',  status: 200, weight: 5  },
-  { action: 'auth.login',            method: 'POST',   status: 401, weight: 3  },  // the failures matter
-  { action: 'teams.keys.reveal',     method: 'POST',   status: 200, weight: 2  },
+/**
+ * `writes` marks an action a read-only viewer cannot perform. The gateway enforces exactly this —
+ * viewers are shown no write controls and the server guards refuse them anyway — so an audit trail
+ * showing a viewer deleting a model would contradict the product's own security model in a
+ * screenshot. Sign-in and sign-out are the only things every role does.
+ */
+const AUDIT_ACTIONS: readonly { action: string; method: string; status: number; weight: number; writes: boolean }[] = [
+  { action: 'auth.login',            method: 'POST',   status: 200, weight: 26, writes: false },
+  { action: 'auth.logout',           method: 'POST',   status: 200, weight: 10, writes: false },
+  { action: 'keys.create',           method: 'POST',   status: 201, weight: 8,  writes: true  },
+  { action: 'keys.update',           method: 'PATCH',  status: 200, weight: 9,  writes: true  },
+  { action: 'keys.delete',           method: 'DELETE', status: 200, weight: 4,  writes: true  },
+  { action: 'teams.create',          method: 'POST',   status: 201, weight: 5,  writes: true  },
+  { action: 'teams.update',          method: 'PATCH',  status: 200, weight: 8,  writes: true  },
+  { action: 'models.update',         method: 'PUT',    status: 200, weight: 7,  writes: true  },
+  { action: 'models.delete',         method: 'DELETE', status: 200, weight: 3,  writes: true  },
+  { action: 'providers.create',      method: 'POST',   status: 201, weight: 4,  writes: true  },
+  { action: 'providers.fetch-models',method: 'POST',   status: 200, weight: 6,  writes: true  },
+  { action: 'settings.update',       method: 'PATCH',  status: 200, weight: 5,  writes: true  },
+  { action: 'auth.login',            method: 'POST',   status: 401, weight: 3,  writes: false },  // the failures matter
+  // Revealing a team key's plaintext is write-guarded on the server: a copyable credential is not
+  // "read-only". Owners only, matching the real guard.
+  { action: 'teams.keys.reveal',     method: 'POST',   status: 200, weight: 2,  writes: true  },
 ];
 
 function generateAudit(rng: Rng, opts: GenerateOptions, count: number): GeneratedAudit[] {
   const rows: GeneratedAudit[] = [];
   for (let i = 0; i < count; i++) {
     const entry = weightedPick(rng, AUDIT_ACTIONS);
-    const actor = rng.pick(SEED_ACTORS);
+    // Draw the actor from the roles that could actually have performed this action.
+    const eligible = entry.writes ? SEED_ACTORS.filter((a) => a.role !== 'viewer') : SEED_ACTORS;
+    const actor = rng.pick(eligible);
     const createdAt = new Date(opts.now.getTime() - rng.int(0, opts.days * 24 * 60) * 60_000);
     rows.push({
       action: entry.action,

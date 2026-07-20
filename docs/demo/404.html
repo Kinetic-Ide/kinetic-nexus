@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alayra Nexus™</title>
+    <link rel="icon" type="image/svg+xml" href="/Alayra-Nexus/demo/favicon.svg" />
+    <meta name="color-scheme" content="dark light" />
+    <!-- Set the theme before first paint to avoid a flash of the wrong palette. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('nx_theme');
+          if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/Alayra-Nexus/demo/assets/index-CDtVXiRr.js"></script>
+    <link rel="stylesheet" crossorigin href="/Alayra-Nexus/demo/assets/index-D3hVzMM1.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { DemoBanner } from '../demo/DemoBanner';
 import s from './shell.module.css';
 
 /**
@@ -31,6 +32,9 @@ export function AppShell({ children }: { children?: ComponentChildren }) {
       <Sidebar open={navOpen} />
       {navOpen && <div class={s.navScrim} onClick={() => setNavOpen(false)} />}
       <div class={s.main}>
+        {/* Inside the main column, not above the shell: the shell is a 100vh grid, so a sibling
+            banner would push the whole layout past the viewport and give the page a scrollbar. */}
+        {import.meta.env.VITE_DEMO === '1' && <DemoBanner />}
         <Topbar onMenu={() => setNavOpen((v) => !v)} navOpen={navOpen} />
         <main class={s.content}>
           <div class={s.contentInner}>{children}</div>

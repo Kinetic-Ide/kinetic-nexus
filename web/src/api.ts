@@ -81,6 +81,21 @@ function errorText(body: string, status: number): string {
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  // The static demo has no gateway behind it, so every call is answered from a frozen dataset
+  // instead. `import.meta.env.VITE_DEMO` is a compile-time constant: in a production build this is
+  // `'1' === '1'` → false, the branch is removed, and the demo module is tree-shaken out entirely.
+  // Deliberately here, at the single funnel every typed helper already passes through, rather than
+  // as a parallel client that would drift from this one.
+  if (import.meta.env.VITE_DEMO === '1') {
+    const { demoRespond, DemoReadOnlyError } = await import('./demo/respond');
+    try {
+      return demoRespond<T>(method, path);
+    } catch (err) {
+      if (err instanceof DemoReadOnlyError) throw new ApiError(403, err.message);
+      throw err;
+    }
+  }
+
   const hasBody = body !== undefined;
   const res = await fetch(path, {
     method,

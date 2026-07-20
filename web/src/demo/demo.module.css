@@ -1,0 +1,33 @@
+/* The static demo's banner. Only ever loaded by the demo build. */
+
+.banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 12.5px;
+  /* Above the topbar (30) and the drawer (40): this is the one thing on the page that must never be
+     covered, because everything below it is only true in the context it sets. */
+  position: relative; z-index: 45;
+}
+
+.bannerIcon { color: var(--accent); flex-shrink: 0; }
+
+.bannerText { flex: 1; min-width: 0; line-height: 1.45; }
+
+.bannerCta {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 4px 11px; border-radius: var(--radius-sm);
+  background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 600; text-decoration: none;
+  transition: filter .13s var(--ease);
+}
+.bannerCta:hover { filter: brightness(1.1); }
+
+/* On a phone the sentence matters more than the button sitting beside it. */
+@media (max-width: 640px) {
+  .banner { flex-wrap: wrap; padding: 8px 14px; gap: 8px; }
+  .bannerText { flex-basis: 100%; order: 2; }
+  .bannerCta { order: 1; margin-left: auto; }
+}
