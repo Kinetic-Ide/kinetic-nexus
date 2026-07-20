@@ -84,10 +84,17 @@ export function NotificationsBell() {
   const hasCriticalUnread = feed.some((n) => !n.read && n.severity === 'critical');
 
   // Pop the badge when a poll brings the unread count *up* — a new alert deserves a beat of motion.
+  // prevUnread MUST update on every change (not just the else): if it only advanced when the count
+  // fell, a rise-then-fall (0→3→2) would still read prev=0 and pop on the *decrease*.
   const prevUnread = useRef(unread);
   useEffect(() => {
-    if (unread > prevUnread.current) { setBump(true); const t = setTimeout(() => setBump(false), 400); return () => clearTimeout(t); }
+    let t: ReturnType<typeof setTimeout> | undefined;
+    if (unread > prevUnread.current) {
+      setBump(true);
+      t = setTimeout(() => setBump(false), 400);
+    }
     prevUnread.current = unread;
+    return () => { if (t) clearTimeout(t); };
   }, [unread]);
 
   const shown  = tab === 'unread' ? feed.filter((n) => !n.read) : feed;

@@ -9,6 +9,20 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
 ## [Unreleased]
 
+### Fixed
+- **The notifications panel no longer opens behind the page (Phase 7.17a).** The top bar's
+  `backdrop-filter` already made it a stacking context, but without a `z-index` it sat at the same
+  level as the page content painted after it — so the bell's panel, which overflows the bar, was
+  covered by the first row of cards. The bar is now explicitly lifted above content (and still
+  below dialogs).
+- **A failed sign-in, claim, or password-recovery no longer locks the form (Phase 7.17a).** Each of
+  those screens cleared its "busy" flag only on the success path, so a dropped connection left the
+  button disabled until a reload. All three now clear it in a `finally`, and a thrown claim or
+  recovery surfaces an error instead of failing silently.
+- **The unread badge no longer animates when the count goes *down* (Phase 7.17a).** The previous
+  count was only remembered when the count fell, so a rise-then-fall (0 → 3 → 2) still compared
+  against 0 and popped on the decrease.
+
 ### Changed
 - **The dashboard uses the whole screen now (Phase 7.16d).** Content was capped at 1180px and
   centered, so a wide monitor showed a narrow column framed by empty gutters. The cap is now a

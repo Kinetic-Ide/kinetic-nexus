@@ -32,6 +32,10 @@
   height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 22px;
   border-bottom: 1px solid var(--border);
   background: var(--surface); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
+  /* The topbar's backdrop-filter already makes it a stacking context; without an explicit z-index it
+     sits at the same auto level as the later-painted .content, so the bell panel (overflowing the
+     topbar) rendered *behind* the page cards. Lift the whole bar above content, below the modal. */
+  position: relative; z-index: 30;
 }
 .topSpacer { flex: 1; }
 .livePill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--green); background: var(--green-bg); padding: 4px 10px; border-radius: 20px; }

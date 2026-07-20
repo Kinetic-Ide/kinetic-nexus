@@ -93,6 +93,18 @@ describe('Login', () => {
     await waitFor(() => expect(screen.getByText(/try again in 900s/i)).toBeInTheDocument());
   });
 
+  it('re-enables the button when the sign-in request throws, rather than locking the form', async () => {
+    loginFn.mockRejectedValue(new Error('network down'));
+    render(<Login onAuthed={vi.fn()} />);
+    await signInScreen();
+
+    typePassword('s3cret');
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    // The finally block must re-enable the button so the user can retry.
+    await waitFor(() => expect(screen.getByRole('button', { name: /sign in/i })).toBeEnabled());
+  });
+
   it('will not submit an empty password', async () => {
     render(<Login onAuthed={vi.fn()} />);
     await signInScreen();

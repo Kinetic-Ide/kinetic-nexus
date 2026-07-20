@@ -61,6 +61,19 @@ describe('ClaimGateway wizard', () => {
     expect(screen.getByText(/don’t match/)).toBeInTheDocument();
   });
 
+  it('re-enables and shows an error when the claim throws, rather than locking the wizard', async () => {
+    claim.mockRejectedValue(new Error('network down'));
+    render(<ClaimGateway brand={<div />} carriesExistingTwoFactor={false} onAuthed={vi.fn()} />);
+
+    await walkToStep3();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByText('Name your workspace');
+    fireEvent.click(screen.getByRole('button', { name: /create owner account/i }));
+
+    await waitFor(() => expect(screen.getByText(/could not create your account/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /create owner account/i })).toBeEnabled();
+  });
+
   it('saves the organization name to branding after a successful claim', async () => {
     render(<ClaimGateway brand={<div />} carriesExistingTwoFactor={false} onAuthed={vi.fn()} />);
 

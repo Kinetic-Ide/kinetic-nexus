@@ -52,16 +52,23 @@ export function ClaimGateway({
   const finish = async () => {
     if (busy) return;
     setBusy(true); setError(null);
-    const r = await claimGateway({ masterPassword, name, email, password });
-    if (!r.ok) { setBusy(false); setError(r.error ?? 'Could not create your account.'); return; }
-    // The claim signed us in; name the workspace if one was given. Best-effort — a branding failure
-    // must never strand a freshly-created owner outside their gateway.
-    if (orgName.trim()) {
-      try { await PUT('/admin/branding', { companyName: orgName.trim() }); } catch { /* non-fatal */ }
+    // try/catch/finally so a thrown claim (network drop) surfaces an error and re-enables the button,
+    // rather than leaving the wizard permanently stuck on "Creating your account…".
+    try {
+      const r = await claimGateway({ masterPassword, name, email, password });
+      if (!r.ok) { setError(r.error ?? 'Could not create your account.'); return; }
+      // The claim signed us in; name the workspace if one was given. Best-effort — a branding failure
+      // must never strand a freshly-created owner outside their gateway.
+      if (orgName.trim()) {
+        try { await PUT('/admin/branding', { companyName: orgName.trim() }); } catch { /* non-fatal */ }
+      }
+      setCarried(!!r.twoFactorCarriedOver);
+      setRecoveryKey(r.recoveryKey ?? '');
+    } catch {
+      setError('Could not create your account.');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setCarried(!!r.twoFactorCarriedOver);
-    setRecoveryKey(r.recoveryKey ?? '');
   };
 
   if (recoveryKey !== null) {

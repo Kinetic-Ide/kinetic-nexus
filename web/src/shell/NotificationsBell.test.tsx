@@ -17,7 +17,7 @@ vi.mock('preact-iso', async (orig) => ({
 import { NotificationsBell } from './NotificationsBell';
 
 const alert = (over: Record<string, unknown> = {}) => ({
-  id: 'n1', type: 'keyBanned', severity: 'critical', title: 'A openai key was auto-banned',
+  id: 'n1', type: 'keyBanned', severity: 'critical', title: 'An openai key was auto-banned',
   body: 'That credential is dead — traffic is degrading until you replace it.',
   section: 'nexus', read: false, createdAt: new Date(Date.now() - 60_000).toISOString(),
   ...over,
@@ -48,7 +48,7 @@ describe('NotificationsBell', () => {
     renderBell();
     await waitFor(() => expect(screen.getByRole('button', { name: /1 unread/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /1 unread/i }));
-    expect(await screen.findByText('A openai key was auto-banned')).toBeInTheDocument();
+    expect(await screen.findByText('An openai key was auto-banned')).toBeInTheDocument();
   });
 
   it('marks an alert read and jumps to the section that raised it', async () => {
@@ -58,7 +58,7 @@ describe('NotificationsBell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /1 unread/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /1 unread/i }));
 
-    fireEvent.click(await screen.findByText('A openai key was auto-banned'));
+    fireEvent.click(await screen.findByText('An openai key was auto-banned'));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/admin/notifications/n1/read'));
     expect(route).toHaveBeenCalledWith('/nexus');
   });
@@ -67,7 +67,7 @@ describe('NotificationsBell', () => {
     get.mockResolvedValue({ notifications: [alert({ read: true })], unreadCount: 0 });
     renderBell();
     fireEvent.click(await screen.findByRole('button', { name: /0 unread/i }));
-    fireEvent.click(await screen.findByText('A openai key was auto-banned'));
+    fireEvent.click(await screen.findByText('An openai key was auto-banned'));
     await waitFor(() => expect(route).toHaveBeenCalledWith('/nexus'));
     expect(post).not.toHaveBeenCalled();
   });

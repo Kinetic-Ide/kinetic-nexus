@@ -54,19 +54,24 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
     e.preventDefault();
     if (!password || busy) return;
     setBusy(true); setError(null);
-    const r = await login(password, needCode ? code : undefined, email);
-    setBusy(false);
-    if (r.ok) { onAuthed(); return; }
-    if (r.totpRequired) {
-      // First correct password with 2FA on: reveal the code field instead of showing an error.
-      setNeedCode(true);
-      setHint('Enter the 6-digit code from your authenticator app, or a recovery code.');
-      return;
+    // finally guarantees the button re-enables even if `login` throws (network drop) — otherwise a
+    // single failed request would lock the form until reload.
+    try {
+      const r = await login(password, needCode ? code : undefined, email);
+      if (r.ok) { onAuthed(); return; }
+      if (r.totpRequired) {
+        // First correct password with 2FA on: reveal the code field instead of showing an error.
+        setNeedCode(true);
+        setHint('Enter the 6-digit code from your authenticator app, or a recovery code.');
+        return;
+      }
+      setHint(null);
+      setError(r.lockedOut && r.retryAfter
+        ? `Too many attempts. Try again in ${r.retryAfter}s.`
+        : (r.error ?? 'Invalid credentials.'));
+    } finally {
+      setBusy(false);
     }
-    setHint(null);
-    setError(r.lockedOut && r.retryAfter
-      ? `Too many attempts. Try again in ${r.retryAfter}s.`
-      : (r.error ?? 'Invalid credentials.'));
   };
 
   const Brand = (

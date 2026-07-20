@@ -32,10 +32,16 @@ export function RecoverPassword({ brand, onDone }: { brand: ComponentChildren; o
     e.preventDefault();
     if (busy) return;
     setBusy(true); setError(null);
-    const r = await recoverPassword({ email, recoveryKey, newPassword });
-    setBusy(false);
-    if (!r.ok) { setError(r.error ?? 'That email and recovery key do not match an active account.'); return; }
-    setReplacement(r.recoveryKey ?? '');
+    // finally so a thrown request can't leave the reset button stuck disabled.
+    try {
+      const r = await recoverPassword({ email, recoveryKey, newPassword });
+      if (!r.ok) { setError(r.error ?? 'That email and recovery key do not match an active account.'); return; }
+      setReplacement(r.recoveryKey ?? '');
+    } catch {
+      setError('Unable to recover your password right now. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (replacement !== null) {
