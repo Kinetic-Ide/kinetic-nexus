@@ -7,7 +7,7 @@ All notable changes to Alayra Nexus™ are documented here. The format is based 
 The `model: "alayra-nexus-1"` routing contract is the public API surface covered by
 semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
 
-## [Unreleased]
+## [1.3.0] - 2026-07-20
 
 ### Added
 - **The dashboard works on a phone (Phase 7.17d).** There was no responsive handling at all: a fixed
@@ -17,6 +17,10 @@ semver. The legacy ids `kinetic-nexus-1` and `nexus` remain accepted as aliases.
   the full width, and the page padding tightens. Nothing changes above the breakpoints.
 
 ### Fixed
+- **The mobile navigation drawer was see-through (Phase 7.17d).** Docked, the sidebar is a grid track
+  and its 3.5%-white glass fill reads against the page background. Floating over the content as a
+  drawer, that same fill let the page show straight through the nav labels. Under the breakpoint it
+  is now opaque.
 - **Dialogs were being sized by whatever card opened them (Phase 7.17d).** `backdrop-filter` makes an
   element a containing block for `position: fixed` descendants, and cards carried it — so a dialog's
   "full-screen" overlay was really only as big as the card behind it. On a desktop that quietly
