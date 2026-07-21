@@ -114,6 +114,54 @@ describe('demo responder — writes', () => {
   });
 });
 
+// The guard that would have caught the bug this test file was extended for.
+//
+// The demo shipped with no fixture for GET /admin/users, so the Admin page rendered an error on the
+// published site. The hand-written PATHS list above could not catch it — a list only covers what
+// somebody remembered to add. This scans the dashboard's own source for the endpoints it calls and
+// requires each one to be either answered or explicitly excused, so a page added later fails here
+// rather than on the public demo.
+describe('demo responder — every endpoint the dashboard calls', () => {
+  // Endpoints that are never GET, so having no read fixture is correct rather than an omission.
+  // Each is a mutation: signing in, claiming, rotating, purging, revoking.
+  const WRITE_ONLY = new Set([
+    '/admin/login', '/admin/logout',
+    '/admin/setup/claim', '/admin/setup/reset',
+    '/admin/auth/recover', '/admin/auth/recovery-codes',
+    '/admin/auth/totp/enrol', '/admin/auth/totp/confirm', '/admin/auth/totp/disable',
+    '/admin/me/password', '/admin/me/recovery-key', '/admin/me/sessions/revoke-others',
+    '/admin/api-key/regenerate', '/admin/cache/purge',
+    '/admin/notifications/read-all', '/admin/invites/accept',
+  ]);
+
+  it('answers every GET endpoint referenced in the dashboard source', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return walk(full);
+      return /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry) ? [full] : [];
+    });
+
+    const paths = new Set<string>();
+    for (const file of walk(join(process.cwd(), 'src'))) {
+      const src = readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/'(\/admin\/[a-zA-Z0-9/_.-]*)'/g)) paths.add(m[1]);
+    }
+
+    expect(paths.size).toBeGreaterThan(20); // the scan found something; a silent zero would pass vacuously
+
+    const unhandled = [...paths]
+      .filter((p) => !WRITE_ONLY.has(p))
+      .filter((p) => {
+        try { demoRespond('GET', p); return false; } catch { return true; }
+      });
+
+    expect(unhandled).toEqual([]);
+  });
+});
+
 describe('demo responder — gaps', () => {
   // Loud, not silent: an unfixtured path should be obvious in development rather than rendering an
   // empty panel in the published demo.

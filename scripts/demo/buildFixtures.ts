@@ -81,6 +81,21 @@ async function buildTeamsList() {
   })));
 }
 
+/**
+ * The Teams page's "Access keys" tab. Assembled inline in teams.routes.ts rather than in a service,
+ * so it is reproduced here field for field — a drift between the two should be visible in a diff.
+ * Only the MASK ships; the encrypted key and its hash never leave the database.
+ */
+async function buildTeamKeys() {
+  const keys = await prisma.nexusTeamKey.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: { team: { select: { id: true, name: true } } },
+  });
+  return keys.map((k) => ({
+    id: k.id, name: k.name, maskedKey: k.maskedKey, team: k.team, createdAt: k.createdAt,
+  }));
+}
+
 async function main() {
   console.log('\nBuilding demo fixtures from the seeded gateway\n');
 
@@ -130,6 +145,9 @@ async function main() {
   );
   console.log(`  notifications   ${notifications.notifications.length} (${notifications.unreadCount} unread)`);
 
+  const teamKeys = await attempt('team keys', () => buildTeamKeys(), []);
+  console.log(`  team keys       ${teamKeys.length}`);
+
   const health = await attempt('health', () => getHealthOverview(), null);
   const cacheStats  = await attempt('cache stats', () => getCacheStats(), null);
   const cacheConfig = await attempt('cache config', () => getCacheConfigForUI(), null);
@@ -143,6 +161,7 @@ async function main() {
     nexus,
     models: { models, capabilities: CAPABILITIES },
     teams,
+    teamKeys,
     teamStats,
     audit,
     auditLarge,

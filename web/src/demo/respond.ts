@@ -71,6 +71,29 @@ export const DEMO_IDENTITY = {
 };
 
 /**
+ * The administrators shown on the Admin page. Deliberately the same four people the seeded audit
+ * trail attributes actions to, so the log and the people list agree — a demo whose "who did this"
+ * names someone absent from the team reads as fabricated.
+ *
+ * Addresses use .invalid (reserved by RFC 2606 and guaranteed never to resolve): this is published
+ * to a public page, and the dataset's own tests reject e-mail-shaped strings for the same reason.
+ */
+const DEMO_USERS = [
+  { id: 'u-owner',  email: 'abbas@example.invalid',  name: 'Abbas Baber', role: 'owner',  status: 'active',    source: 'local', twoFactorEnabled: true,  lastLoginAt: '2026-07-20T09:14:00.000Z', createdAt: '2026-04-22T08:00:00.000Z' },
+  { id: 'u-admin1', email: 'liaqat@example.invalid', name: 'Liaqat Ali',  role: 'admin',  status: 'active',    source: 'local', twoFactorEnabled: true,  lastLoginAt: '2026-07-19T16:02:00.000Z', createdAt: '2026-04-23T10:30:00.000Z' },
+  { id: 'u-admin2', email: 'sana@example.invalid',   name: 'Sana Malik',  role: 'admin',  status: 'active',    source: 'sso',   twoFactorEnabled: false, lastLoginAt: '2026-07-20T07:41:00.000Z', createdAt: '2026-05-06T09:15:00.000Z' },
+  { id: 'u-viewer', email: 'usman@example.invalid',  name: 'Usman Tariq', role: 'viewer', status: 'active',    source: 'local', twoFactorEnabled: false, lastLoginAt: '2026-07-19T11:20:00.000Z', createdAt: '2026-06-01T13:45:00.000Z' },
+  { id: 'u-former', email: 'former@example.invalid', name: 'Bilal Ahmed', role: 'viewer', status: 'suspended', source: 'local', twoFactorEnabled: false, lastLoginAt: '2026-06-28T15:05:00.000Z', createdAt: '2026-05-19T11:00:00.000Z' },
+];
+
+/** Mirrors ROLE_LABELS (src/lib/roles.ts): the list travels with what each role means. */
+const DEMO_ROLES = {
+  owner:  { label: 'Owner',  description: 'Full control, including managing people, single sign-on, compliance, and the master API key.' },
+  admin:  { label: 'Admin',  description: 'Runs the gateway day to day — pools, keys, models, teams, caching and settings — but cannot manage people or the gateway itself.' },
+  viewer: { label: 'Viewer', description: 'Read-only. Can see every section but change nothing.' },
+};
+
+/**
  * Answer one API call from the frozen dataset.
  *
  * Writes are refused rather than faked. A demo that appears to save and then silently forgets is a
@@ -113,8 +136,20 @@ export function demoRespond<T>(method: string, path: string): T {
     case '/admin/branding':             return { companyName: null, logoDataUri: null } as T;
     case '/admin/config':               return { publicUrl: 'https://nexus.example.com', source: 'demo' } as T;
     case '/admin/invites':              return { invites: [] } as T;
+
+    // The people the audit trail already names, so the Admin page and the log tell the same story.
+    // Addresses use .invalid (RFC 2606) — a published fixture must not carry a routable one, and
+    // the dataset's own tests reject e-mail-shaped strings for the same reason.
+    case '/admin/users':                return { users: DEMO_USERS, roles: DEMO_ROLES } as T;
     case '/admin/providers':            return { providers: dataset.nexus?.tiers?.flatMap((t) => t.providers) ?? [] } as T;
     case '/admin/setup/status':         return { claimed: true } as T;
+    case '/admin/team-keys':            return { keys: dataset.teamKeys } as T;
+
+    // Owner-only surfaces. A viewer is never shown these, so the demo answers with an empty list
+    // rather than inventing credentials — and an empty list is the truthful answer for a gateway
+    // whose only administrator interface is this demo.
+    case '/admin/tokens':               return { tokens: [] } as T;
+    case '/admin/models/pricing-catalog': return { entries: [] } as T;
   }
 
   // Per-team stats: /admin/teams/:id/stats
