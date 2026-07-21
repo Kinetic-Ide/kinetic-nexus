@@ -46,11 +46,23 @@ const OUT_FILE = join(OUT_DIR, 'dataset.json');
 
 type Json = Record<string, unknown>;
 
-/** Never let one unavailable aggregate abort the whole build — record it and carry on. */
+/**
+ * Aggregates that failed. Collected rather than thrown so one missing surface does not abort a
+ * build — but see the refusal at the end of main(): a run where everything failed must NOT quietly
+ * write a dataset of nulls over a good one.
+ *
+ * This is not hypothetical. A rebuild once ran against a database whose host port had silently
+ * disappeared, every aggregate fell back, and the script cheerfully replaced a 172 KB dataset with
+ * 2 KB of nulls and reported success. Only the fact that the file was committed saved it.
+ */
+const failures: string[] = [];
+
+/** Record a failed aggregate and carry on with a fallback. */
 async function attempt<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
   } catch (err) {
+    failures.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     console.warn(`  ! ${label}: ${err instanceof Error ? err.message : err} — using fallback`);
     return fallback;
   }
@@ -170,6 +182,26 @@ async function main() {
     cacheStats,
     cacheConfig,
   };
+
+  // Refuse to publish an empty demo.
+  //
+  // The per-aggregate fallbacks keep one missing surface from aborting a build, but together they
+  // also mean a run against an unreachable database "succeeds" with every field null — and then
+  // overwrites a good dataset with nothing. The overview is the load-bearing one: the whole demo is
+  // a photograph of a used gateway, and a demo showing zero requests says the product does nothing.
+  const empty = !overview || overview.stats.totalRequests === 0 || teams.length === 0;
+  if (empty || failures.length > 3) {
+    console.error(`\n  REFUSING TO WRITE — the source gateway did not answer.\n`);
+    for (const f of failures.slice(0, 6)) console.error(`    ${f}`);
+    console.error(`\n  ${OUT_FILE} was left untouched.`);
+    console.error(`  Check DATABASE_URL and REDIS_URL point at a seeded gateway (npm run seed), then retry.\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (failures.length) {
+    console.warn(`\n  ${failures.length} aggregate(s) fell back — the demo will show defaults for those.`);
+  }
 
   mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(OUT_FILE, JSON.stringify(dataset, null, 2));
