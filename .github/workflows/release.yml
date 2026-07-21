@@ -31,7 +31,7 @@ jobs:
     name: Build & push image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Emulation for the arm64 build (Apple Silicon / Graviton).
       - uses: docker/setup-qemu-action@v3
